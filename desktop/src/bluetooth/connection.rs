@@ -228,7 +228,7 @@ impl ConnectionHandler {
         state: &mut ConnectionState,
         crypto: &mut Option<Arc<CryptoContext>>,
         device_id: &mut Option<String>,
-        linux_device_id: &str,
+        _linux_device_id: &str,
         event_tx: &mpsc::Sender<ConnectionEvent>,
     ) -> Result<Option<Message>> {
         let mut message = Message::from_json(json)?;

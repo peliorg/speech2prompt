@@ -14,7 +14,7 @@
 
 //! Text injection abstraction and factory.
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use std::env;
 use tracing::{info, warn};
 

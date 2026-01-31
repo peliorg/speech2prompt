@@ -15,7 +15,7 @@
 //! Pairing management for handling PIN entry.
 
 use anyhow::Result;
-use std::sync::Arc;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{info, warn};
 
@@ -73,7 +73,7 @@ impl PairingManager {
     /// Get stored crypto context for a paired device.
     pub fn get_crypto_context(&self, android_device_id: &str) -> Option<CryptoContext> {
         let device = self.storage.get_device_by_android_id(android_device_id)?;
-        let secret = base64::decode(&device.shared_secret).ok()?;
+        let secret = STANDARD.decode(&device.shared_secret).ok()?;
         
         if secret.len() != 32 {
             warn!("Invalid shared secret length for device {}", android_device_id);
@@ -97,7 +97,7 @@ impl PairingManager {
             address: address.to_string(),
             name: name.to_string(),
             android_device_id: android_device_id.to_string(),
-            shared_secret: base64::encode(crypto.key()),
+            shared_secret: STANDARD.encode(crypto.key()),
             paired_at: chrono::Local::now(),
         };
         

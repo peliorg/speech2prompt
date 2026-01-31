@@ -16,7 +16,7 @@
 
 use anyhow::Result;
 use bluer::rfcomm::{Listener, SocketAddr};
-use bluer::{Address, Session};
+use bluer::Address;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{error, info};
