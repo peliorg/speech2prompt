@@ -218,8 +218,14 @@ jobs:
           if [ -f desktop/resources/icons/speech2code.png ]; then
             cp desktop/resources/icons/speech2code.png AppDir/usr/share/icons/hicolor/256x256/apps/
           else
-            convert -size 256x256 xc:blue -fill white -gravity center -pointsize 48 \
-              -annotate 0 "S2C" AppDir/usr/share/icons/hicolor/256x256/apps/speech2code.png
+            # Create a simple placeholder icon using convert
+            convert -size 256x256 xc:blue -fill white -gravity center \
+              -draw "circle 128,128 128,228" \
+              AppDir/usr/share/icons/hicolor/256x256/apps/speech2code.png || \
+            # Fallback: Create a minimal PNG if convert fails
+            (sudo apt-get install -y imagemagick fonts-dejavu-core && \
+             convert -size 256x256 xc:blue -fill white -gravity center -pointsize 48 \
+               -font DejaVu-Sans -annotate 0 "S2C" AppDir/usr/share/icons/hicolor/256x256/apps/speech2code.png)
           fi
           
           # Create AppImage symlinks
