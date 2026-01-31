@@ -1,6 +1,6 @@
-# Speech2Code Quick Start Guide
+# Speech2Prompt Quick Start Guide
 
-This guide will walk you through setting up and testing Speech2Code on your Linux desktop and Android device.
+This guide will walk you through setting up and testing Speech2Prompt on your Linux desktop and Android device.
 
 ## Prerequisites Check
 
@@ -35,7 +35,7 @@ sudo apt install ydotool
 ### Build the Desktop Application
 
 ```bash
-cd ~/workspace/priv/speech2code/desktop
+cd ~/workspace/priv/speech2prompt/desktop
 cargo build --release
 ```
 
@@ -49,13 +49,13 @@ Choose one of these options:
 ```bash
 ./scripts/install.sh --user
 ```
-This installs to `~/.local/bin/speech2code-desktop`
+This installs to `~/.local/bin/speech2prompt-desktop`
 
 **Option B: System Installation**
 ```bash
 sudo ./scripts/install.sh --system
 ```
-This installs to `/usr/local/bin/speech2code-desktop`
+This installs to `/usr/local/bin/speech2prompt-desktop`
 
 **Option C: Run Without Installing**
 ```bash
@@ -68,10 +68,10 @@ cargo run --release
 
 ```bash
 # If installed:
-speech2code-desktop
+speech2prompt-desktop
 
 # If running from source:
-cd ~/workspace/priv/speech2code/desktop
+cd ~/workspace/priv/speech2prompt/desktop
 cargo run --release
 ```
 
@@ -110,7 +110,7 @@ default-agent
 ### Option A: Debug Build (Fast, for Testing)
 
 ```bash
-cd ~/workspace/priv/speech2code/android
+cd ~/workspace/priv/speech2prompt/android
 flutter pub get
 flutter build apk --debug
 ```
@@ -120,7 +120,7 @@ The APK will be at: `android/build/app/outputs/flutter-apk/app-debug.apk`
 ### Option B: Release Build (Optimized)
 
 ```bash
-cd ~/workspace/priv/speech2code/android
+cd ~/workspace/priv/speech2prompt/android
 
 # Generate a keystore (one-time setup)
 ./scripts/generate-keystore.sh
@@ -151,7 +151,7 @@ cp android/build/app/outputs/flutter-apk/app-debug.apk ~/Downloads/
 # Settings > Developer Options > Enable "USB Debugging"
 
 # Connect via USB and install:
-cd ~/workspace/priv/speech2code/android
+cd ~/workspace/priv/speech2prompt/android
 flutter install
 ```
 
@@ -187,13 +187,13 @@ bluetoothctl devices
 
 ### Grant Permissions on Android
 
-1. Open the **Speech2Code** app
+1. Open the **Speech2Prompt** app
 2. Grant **Microphone** permission when prompted
 3. Grant **Bluetooth** and **Nearby Devices** permissions when prompted
 
 ### Connect to Your Desktop
 
-1. In the Speech2Code app, tap the **Connect** button
+1. In the Speech2Prompt app, tap the **Connect** button
 2. You should see your computer in the device list
 3. Tap your computer's name
 4. **Enter the PIN** when prompted:
@@ -206,7 +206,7 @@ bluetoothctl devices
 1. After successful pairing, the app shows the home screen
 2. Open any application on your Linux desktop (text editor, terminal, browser, etc.)
 3. Click to position the cursor where you want text to appear
-4. **Tap the microphone button** in the Speech2Code app
+4. **Tap the microphone button** in the Speech2Prompt app
 5. **Start speaking!**
 
 The text should appear at your cursor position in real-time.
@@ -234,20 +234,20 @@ You can also say:
 
 ```bash
 # Check for missing libraries
-ldd ~/.local/bin/speech2code-desktop | grep "not found"
+ldd ~/.local/bin/speech2prompt-desktop | grep "not found"
 
 # Check Bluetooth service
 sudo systemctl status bluetooth
 
 # Check logs
-journalctl --user -u speech2code -f
+journalctl --user -u speech2prompt -f
 ```
 
 ### Android App Won't Build
 
 ```bash
 # Clean and rebuild
-cd ~/workspace/priv/speech2code/android
+cd ~/workspace/priv/speech2prompt/android
 flutter clean
 flutter pub get
 flutter build apk --debug
@@ -285,7 +285,7 @@ remove <PHONE_MAC_ADDRESS>
 
 ### Speech Recognition Not Working
 
-1. **Check microphone permissions** in Android Settings > Apps > Speech2Code
+1. **Check microphone permissions** in Android Settings > Apps > Speech2Prompt
 2. **Test microphone** in Android Settings > Sound to verify it works
 3. **Check internet connection** - Android speech recognition may need internet initially
 4. **Restart the app**
@@ -344,7 +344,7 @@ If you can't see the tray icon, you can still use the app - just control it via 
 Both devices encrypt all communication with AES-256-GCM. To verify:
 ```bash
 # Check the desktop logs for encryption messages:
-grep "Encrypted" ~/.local/share/speech2code/logs/*
+grep "Encrypted" ~/.local/share/speech2prompt/logs/*
 ```
 
 ### Test with Different Applications
@@ -372,7 +372,7 @@ bluetoothctl
 
 Once everything works:
 
-1. **Enable autostart**: `systemctl --user enable speech2code`
+1. **Enable autostart**: `systemctl --user enable speech2prompt`
 2. **Configure settings** in Android app (Settings screen)
 3. **Customize voice commands** (planned feature)
 4. **Build release versions** for daily use
@@ -382,8 +382,8 @@ Once everything works:
 If you encounter issues:
 
 1. Check the terminal output for error messages
-2. Review the logs: `~/.local/share/speech2code/logs/`
-3. Check Android logcat: `adb logcat | grep Speech2Code`
+2. Review the logs: `~/.local/share/speech2prompt/logs/`
+3. Check Android logcat: `adb logcat | grep Speech2Prompt`
 4. Read the troubleshooting section above
 5. Check the GitHub issues
 

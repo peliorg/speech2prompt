@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speech2code/utils/encryption.dart';
+import 'package:speech2prompt/utils/encryption.dart';
 
 void main() {
   group('Encryption Tests', () {

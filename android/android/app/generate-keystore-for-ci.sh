@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Generate release keystore for Speech2Code Android app (for GitHub Actions)
+# Generate release keystore for Speech2Prompt Android app (for GitHub Actions)
 
 KEYSTORE_FILE="upload-keystore.jks"
 KEY_ALIAS="upload"
 
 echo "=========================================="
-echo " Speech2Code Keystore Generator"
+echo " Speech2Prompt Keystore Generator"
 echo " (GitHub Actions Compatible)"
 echo "=========================================="
 echo ""
@@ -68,7 +68,7 @@ keytool -genkey -v \
     -validity 10000 \
     -storepass "$STORE_PASS" \
     -keypass "$KEY_PASS" \
-    -dname "CN=Speech2Code, O=$ORG_NAME, L=$CITY, ST=$STATE, C=$COUNTRY"
+    -dname "CN=Speech2Prompt, O=$ORG_NAME, L=$CITY, ST=$STATE, C=$COUNTRY"
 
 if [ $? -ne 0 ]; then
     echo "Error: Failed to generate keystore"

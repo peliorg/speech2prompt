@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Speech2Code Desktop Library
+//! Speech2Prompt Desktop Library
 
 pub mod bluetooth;
 pub mod commands;

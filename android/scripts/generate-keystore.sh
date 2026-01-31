@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# Generate release keystore for Speech2Code Android app
+# Generate release keystore for Speech2Prompt Android app
 
 KEYSTORE_DIR="$HOME/.android/keystores"
-KEYSTORE_FILE="$KEYSTORE_DIR/speech2code.jks"
-KEY_ALIAS="speech2code"
+KEYSTORE_FILE="$KEYSTORE_DIR/speech2prompt.jks"
+KEY_ALIAS="speech2prompt"
 
 echo "=========================================="
-echo " Speech2Code Keystore Generator"
+echo " Speech2Prompt Keystore Generator"
 echo "=========================================="
 echo ""
 
@@ -47,7 +47,7 @@ keytool -genkey -v \
     -validity 10000 \
     -storepass "$STORE_PASS" \
     -keypass "$KEY_PASS" \
-    -dname "CN=Speech2Code, O=$ORG_NAME, L=$CITY, ST=$STATE, C=$COUNTRY"
+    -dname "CN=Speech2Prompt, O=$ORG_NAME, L=$CITY, ST=$STATE, C=$COUNTRY"
 
 echo ""
 echo "Keystore created at: $KEYSTORE_FILE"

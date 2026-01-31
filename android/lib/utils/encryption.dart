@@ -23,7 +23,7 @@ import '../models/message.dart';
 const int _pbkdf2Iterations = 100000;
 
 /// Salt for key derivation.
-final Uint8List _salt = utf8.encode('speech2code_v1');
+final Uint8List _salt = utf8.encode('speech2prompt_v1');
 
 /// Cryptographic context for a paired session.
 class CryptoContext {

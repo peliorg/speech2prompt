@@ -37,7 +37,7 @@ pub fn show_pin_dialog(app: &Application, device_id: &str) -> oneshot::Receiver<
 
     let window = ApplicationWindow::builder()
         .application(app)
-        .title("Speech2Code - Pairing")
+        .title("Speech2Prompt - Pairing")
         .default_width(300)
         .default_height(200)
         .modal(true)

@@ -1,14 +1,14 @@
 #!/bin/bash
 set -e
 
-# Speech2Code Desktop Installation Script
+# Speech2Prompt Desktop Installation Script
 # Usage: ./install.sh [--user|--system]
 
 INSTALL_MODE="${1:---user}"
 VERSION="0.1.0"
 
 echo "=========================================="
-echo " Speech2Code Desktop Installer"
+echo " Speech2Prompt Desktop Installer"
 echo " Version: $VERSION"
 echo "=========================================="
 echo ""
@@ -72,7 +72,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Build if needed
-if [ ! -f "$PROJECT_DIR/target/release/speech2code-desktop" ]; then
+if [ ! -f "$PROJECT_DIR/target/release/speech2prompt-desktop" ]; then
     echo "Building release binary..."
     cd "$PROJECT_DIR"
     cargo build --release
@@ -80,29 +80,29 @@ fi
 
 # Install binary
 echo "Installing binary..."
-cp "$PROJECT_DIR/target/release/speech2code-desktop" "$BIN_DIR/"
-chmod +x "$BIN_DIR/speech2code-desktop"
+cp "$PROJECT_DIR/target/release/speech2prompt-desktop" "$BIN_DIR/"
+chmod +x "$BIN_DIR/speech2prompt-desktop"
 
 # Install desktop file
 echo "Installing desktop entry..."
-sed "s|Exec=.*|Exec=$BIN_DIR/speech2code-desktop|g" \
-    "$PROJECT_DIR/resources/speech2code.desktop" > "$DESKTOP_DIR/speech2code.desktop"
+sed "s|Exec=.*|Exec=$BIN_DIR/speech2prompt-desktop|g" \
+    "$PROJECT_DIR/resources/speech2prompt.desktop" > "$DESKTOP_DIR/speech2prompt.desktop"
 
 # Install icon
-if [ -f "$PROJECT_DIR/resources/icons/speech2code.png" ]; then
+if [ -f "$PROJECT_DIR/resources/icons/speech2prompt.png" ]; then
     echo "Installing icon..."
-    cp "$PROJECT_DIR/resources/icons/speech2code.png" "$ICON_DIR/"
+    cp "$PROJECT_DIR/resources/icons/speech2prompt.png" "$ICON_DIR/"
 fi
 
 # Install systemd service
 echo "Installing systemd service..."
-sed "s|ExecStart=.*|ExecStart=$BIN_DIR/speech2code-desktop|g" \
-    "$PROJECT_DIR/resources/speech2code.service" > "$SYSTEMD_DIR/speech2code.service"
+sed "s|ExecStart=.*|ExecStart=$BIN_DIR/speech2prompt-desktop|g" \
+    "$PROJECT_DIR/resources/speech2prompt.service" > "$SYSTEMD_DIR/speech2prompt.service"
 
 # Install autostart entry (user mode only)
 if [ -n "$AUTOSTART_DIR" ]; then
     echo "Installing autostart entry..."
-    cp "$DESKTOP_DIR/speech2code.desktop" "$AUTOSTART_DIR/"
+    cp "$DESKTOP_DIR/speech2prompt.desktop" "$AUTOSTART_DIR/"
 fi
 
 # Update desktop database
@@ -114,8 +114,8 @@ fi
 systemctl --user daemon-reload 2>/dev/null || true
 
 # Create config directory
-mkdir -p "$HOME/.config/speech2code"
-mkdir -p "$HOME/.local/share/speech2code"
+mkdir -p "$HOME/.config/speech2prompt"
+mkdir -p "$HOME/.local/share/speech2prompt"
 
 echo ""
 echo "=========================================="
@@ -125,13 +125,13 @@ echo ""
 echo "Next steps:"
 echo ""
 echo "1. Start the service:"
-echo "   systemctl --user start speech2code"
+echo "   systemctl --user start speech2prompt"
 echo ""
 echo "2. Enable autostart:"
-echo "   systemctl --user enable speech2code"
+echo "   systemctl --user enable speech2prompt"
 echo ""
 echo "3. Or run manually:"
-echo "   $BIN_DIR/speech2code-desktop"
+echo "   $BIN_DIR/speech2prompt-desktop"
 echo ""
 echo "4. Make sure Bluetooth is enabled:"
 echo "   sudo systemctl start bluetooth"

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! BLE GATT server implementation for Speech2Code.
+//! BLE GATT server implementation for Speech2Prompt.
 
 use anyhow::{anyhow, Result};
 use bluer::gatt::local::{
@@ -82,7 +82,7 @@ impl ServerState {
     }
 }
 
-/// GATT server for Speech2Code.
+/// GATT server for Speech2Prompt.
 pub struct GattServer {
     adapter: Adapter,
     linux_device_id: String,
@@ -595,7 +595,7 @@ impl GattServer {
         let adv = Advertisement {
             service_uuids: vec![SERVICE_UUID].into_iter().collect(),
             discoverable: Some(true),
-            local_name: Some("Speech2Code".to_string()),
+            local_name: Some("Speech2Prompt".to_string()),
             ..Default::default()
         };
 

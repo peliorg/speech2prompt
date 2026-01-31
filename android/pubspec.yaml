@@ -1,9 +1,9 @@
-name: speech2code
+name: speech2prompt
 description: Voice-to-keyboard bridge for seamless dictation to Linux desktop.
 publish_to: 'none'
 version: 0.2.5+16
 license: Apache-2.0
-homepage: https://github.com/peliorg/speech2code
+homepage: https://github.com/peliorg/speech2prompt
 
 environment:
   sdk: '>=3.8.0 <4.0.0'

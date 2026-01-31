@@ -1,6 +1,6 @@
 # GitHub Workflows
 
-This directory contains the GitHub Actions workflows for automating releases of Speech2Code.
+This directory contains the GitHub Actions workflows for automating releases of Speech2Prompt.
 
 ## Workflows
 
@@ -93,11 +93,11 @@ After successful completion, you'll have:
 - **Git tag**: `v{version}` pushed to repository
 - **GitHub Release**: Created at `https://github.com/{owner}/{repo}/releases/tag/v{version}`
 - **Artifacts attached to release**:
-  - `speech2code-{version}-linux-x86_64.deb`
-  - `speech2code-{version}-linux-x86_64.rpm`
-  - `Speech2Code-{version}-x86_64.AppImage`
-  - `speech2code-{version}.apk`
-  - `speech2code-{version}-source.tar.gz`
+  - `speech2prompt-{version}-linux-x86_64.deb`
+  - `speech2prompt-{version}-linux-x86_64.rpm`
+  - `Speech2Prompt-{version}-x86_64.AppImage`
+  - `speech2prompt-{version}.apk`
+  - `speech2prompt-{version}-source.tar.gz`
 
 ## Local Testing
 
@@ -124,14 +124,14 @@ cd desktop
 cargo build --release
 
 # Create package structure
-PACKAGE_NAME="speech2code_${VERSION}_amd64"
+PACKAGE_NAME="speech2prompt_${VERSION}_amd64"
 mkdir -p "${PACKAGE_NAME}/DEBIAN"
 mkdir -p "${PACKAGE_NAME}/usr/bin"
 mkdir -p "${PACKAGE_NAME}/usr/share/applications"
 
 # Copy files
-cp target/release/speech2code-desktop "${PACKAGE_NAME}/usr/bin/"
-cp resources/speech2code.desktop "${PACKAGE_NAME}/usr/share/applications/"
+cp target/release/speech2prompt-desktop "${PACKAGE_NAME}/usr/bin/"
+cp resources/speech2prompt.desktop "${PACKAGE_NAME}/usr/share/applications/"
 cp packaging/deb/DEBIAN/control "${PACKAGE_NAME}/DEBIAN/"
 sed -i "s/VERSION/${VERSION}/" "${PACKAGE_NAME}/DEBIAN/control"
 
@@ -204,7 +204,7 @@ VERSION=1.2.3 ./build-appimage.sh
 1. Check `desktop/packaging/deb/DEBIAN/control` for correct dependencies
 2. Test package locally:
    ```bash
-   dpkg -i speech2code_1.2.3_amd64.deb
+   dpkg -i speech2prompt_1.2.3_amd64.deb
    apt-get install -f  # Install missing dependencies
    ```
 
@@ -215,7 +215,7 @@ VERSION=1.2.3 ./build-appimage.sh
 When updating system dependencies (GTK, libadwaita, etc.):
 
 1. Update `desktop/packaging/deb/DEBIAN/control` (Depends line)
-2. Update `desktop/packaging/rpm/speech2code.spec` (Requires line)
+2. Update `desktop/packaging/rpm/speech2prompt.spec` (Requires line)
 3. Update workflow `Install system dependencies` step
 4. Test builds locally and in CI
 

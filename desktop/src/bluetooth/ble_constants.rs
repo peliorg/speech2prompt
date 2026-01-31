@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! BLE service and characteristic UUIDs for Speech2Code.
+//! BLE service and characteristic UUIDs for Speech2Prompt.
 
 use uuid::Uuid;
 
-/// Speech2Code GATT service UUID.
+/// Speech2Prompt GATT service UUID.
 pub const SERVICE_UUID: Uuid = Uuid::from_u128(0xa1b2c3d4_e5f6_7890_abcd_ef1234567890);
 
 /// Command RX characteristic UUID (Android writes commands here).
@@ -46,11 +46,11 @@ pub mod flags {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum StatusCode {
-    Idle = 0x00,           // Not paired
+    Idle = 0x00,            // Not paired
     AwaitingPairing = 0x01, // Awaiting pairing
-    Paired = 0x02,         // Paired and ready
-    Busy = 0x03,           // Processing command
-    Error = 0xFF,          // Error state
+    Paired = 0x02,          // Paired and ready
+    Busy = 0x03,            // Processing command
+    Error = 0xFF,           // Error state
 }
 
 impl StatusCode {

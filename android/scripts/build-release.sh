@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo "=========================================="
-echo " Speech2Code Android Release Build"
+echo " Speech2Prompt Android Release Build"
 echo "=========================================="
 echo ""
 

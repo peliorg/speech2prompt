@@ -1,4 +1,4 @@
-package com.speech2code.speech2code
+package com.speech2prompt.speech2prompt
 
 import io.flutter.embedding.android.FlutterActivity
 

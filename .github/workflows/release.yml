@@ -125,12 +125,12 @@ jobs:
         working-directory: desktop
         run: |
           cargo build --release --verbose
-          strip target/release/speech2code-desktop
+          strip target/release/speech2prompt-desktop
 
       - name: Build .deb package
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
-          PACKAGE_NAME="speech2code_${VERSION}_amd64"
+          PACKAGE_NAME="speech2prompt_${VERSION}_amd64"
           PACKAGE_DIR="${PACKAGE_NAME}"
           
           # Create package structure
@@ -141,19 +141,19 @@ jobs:
           mkdir -p "${PACKAGE_DIR}/usr/lib/systemd/user"
           
           # Copy binary
-          cp desktop/target/release/speech2code-desktop "${PACKAGE_DIR}/usr/bin/"
-          chmod 755 "${PACKAGE_DIR}/usr/bin/speech2code-desktop"
+          cp desktop/target/release/speech2prompt-desktop "${PACKAGE_DIR}/usr/bin/"
+          chmod 755 "${PACKAGE_DIR}/usr/bin/speech2prompt-desktop"
           
           # Copy desktop file
-          cp desktop/resources/speech2code.desktop "${PACKAGE_DIR}/usr/share/applications/"
+          cp desktop/resources/speech2prompt.desktop "${PACKAGE_DIR}/usr/share/applications/"
           
           # Copy icon (if exists)
-          if [ -f desktop/resources/icons/speech2code.png ]; then
-            cp desktop/resources/icons/speech2code.png "${PACKAGE_DIR}/usr/share/icons/hicolor/256x256/apps/"
+          if [ -f desktop/resources/icons/speech2prompt.png ]; then
+            cp desktop/resources/icons/speech2prompt.png "${PACKAGE_DIR}/usr/share/icons/hicolor/256x256/apps/"
           fi
           
           # Copy systemd service
-          cp desktop/resources/speech2code.service "${PACKAGE_DIR}/usr/lib/systemd/user/"
+          cp desktop/resources/speech2prompt.service "${PACKAGE_DIR}/usr/lib/systemd/user/"
           
           # Copy control file
           cp desktop/packaging/deb/DEBIAN/control "${PACKAGE_DIR}/DEBIAN/"
@@ -167,7 +167,7 @@ jobs:
           
           # Build package
           dpkg-deb --build "${PACKAGE_DIR}"
-          mv "${PACKAGE_NAME}.deb" "speech2code-${VERSION}-linux-x86_64.deb"
+          mv "${PACKAGE_NAME}.deb" "speech2prompt-${VERSION}-linux-x86_64.deb"
 
       - name: Build .rpm package
         run: |
@@ -177,26 +177,26 @@ jobs:
           mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
           
           # Create staging directory with flat structure
-          STAGING_DIR="speech2code-${VERSION}"
+          STAGING_DIR="speech2prompt-${VERSION}"
           mkdir -p "${STAGING_DIR}"
-          cp desktop/target/release/speech2code-desktop "${STAGING_DIR}/"
-          cp desktop/resources/speech2code.desktop "${STAGING_DIR}/"
-          cp desktop/resources/speech2code.service "${STAGING_DIR}/"
+          cp desktop/target/release/speech2prompt-desktop "${STAGING_DIR}/"
+          cp desktop/resources/speech2prompt.desktop "${STAGING_DIR}/"
+          cp desktop/resources/speech2prompt.service "${STAGING_DIR}/"
           
           # Create source tarball
-          tar czf ~/rpmbuild/SOURCES/speech2code-${VERSION}.tar.gz "${STAGING_DIR}"
+          tar czf ~/rpmbuild/SOURCES/speech2prompt-${VERSION}.tar.gz "${STAGING_DIR}"
           rm -rf "${STAGING_DIR}"
           
           # Copy and process spec file
-          cp desktop/packaging/rpm/speech2code.spec ~/rpmbuild/SPECS/
-          sed -i "s/VERSION/${VERSION}/" ~/rpmbuild/SPECS/speech2code.spec
+          cp desktop/packaging/rpm/speech2prompt.spec ~/rpmbuild/SPECS/
+          sed -i "s/VERSION/${VERSION}/" ~/rpmbuild/SPECS/speech2prompt.spec
           
           # Build RPM (--nodeps skips dependency checking since we're using pre-built binary)
-          rpmbuild -bb --nodeps ~/rpmbuild/SPECS/speech2code.spec
+          rpmbuild -bb --nodeps ~/rpmbuild/SPECS/speech2prompt.spec
           
           # Copy RPM to workspace
-          cp ~/rpmbuild/RPMS/x86_64/speech2code-${VERSION}-1.x86_64.rpm \
-            speech2code-${VERSION}-linux-x86_64.rpm
+          cp ~/rpmbuild/RPMS/x86_64/speech2prompt-${VERSION}-1.x86_64.rpm \
+            speech2prompt-${VERSION}-linux-x86_64.rpm
 
       - name: Download AppImage tools
         run: |
@@ -213,44 +213,44 @@ jobs:
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
           
           # Copy binary
-          cp desktop/target/release/speech2code-desktop AppDir/usr/bin/
+          cp desktop/target/release/speech2prompt-desktop AppDir/usr/bin/
           
           # Copy desktop file
-          cp desktop/resources/speech2code.desktop AppDir/usr/share/applications/
+          cp desktop/resources/speech2prompt.desktop AppDir/usr/share/applications/
           
           # Copy or create icon
-          if [ -f desktop/resources/icons/speech2code.png ]; then
-            cp desktop/resources/icons/speech2code.png AppDir/usr/share/icons/hicolor/256x256/apps/
+          if [ -f desktop/resources/icons/speech2prompt.png ]; then
+            cp desktop/resources/icons/speech2prompt.png AppDir/usr/share/icons/hicolor/256x256/apps/
           else
             # Create a simple placeholder icon using convert
             convert -size 256x256 xc:blue -fill white -gravity center \
               -draw "circle 128,128 128,228" \
-              AppDir/usr/share/icons/hicolor/256x256/apps/speech2code.png || \
+              AppDir/usr/share/icons/hicolor/256x256/apps/speech2prompt.png || \
             # Fallback: Create a minimal PNG if convert fails
             (sudo apt-get install -y imagemagick fonts-dejavu-core && \
              convert -size 256x256 xc:blue -fill white -gravity center -pointsize 48 \
-               -font DejaVu-Sans -annotate 0 "S2C" AppDir/usr/share/icons/hicolor/256x256/apps/speech2code.png)
+               -font DejaVu-Sans -annotate 0 "S2C" AppDir/usr/share/icons/hicolor/256x256/apps/speech2prompt.png)
           fi
           
           # Create AppImage symlinks
-          ln -sf usr/share/applications/speech2code.desktop AppDir/
-          ln -sf usr/share/icons/hicolor/256x256/apps/speech2code.png AppDir/
+          ln -sf usr/share/applications/speech2prompt.desktop AppDir/
+          ln -sf usr/share/icons/hicolor/256x256/apps/speech2prompt.png AppDir/
           
           # Extract appimagetool (works without FUSE)
           ./appimagetool-x86_64.AppImage --appimage-extract
           
           # Build AppImage using extracted tool
           ARCH=x86_64 VERSION=${VERSION} ./squashfs-root/AppRun AppDir \
-            Speech2Code-${VERSION}-x86_64.AppImage
+            Speech2Prompt-${VERSION}-x86_64.AppImage
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-packages
           path: |
-            speech2code-*.deb
-            speech2code-*.rpm
-            Speech2Code-*.AppImage
+            speech2prompt-*.deb
+            speech2prompt-*.rpm
+            Speech2Prompt-*.AppImage
           retention-days: 5
 
   android:
@@ -313,13 +313,13 @@ jobs:
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           cp android/build/app/outputs/flutter-apk/app-release.apk \
-            speech2code-${VERSION}.apk
+            speech2prompt-${VERSION}.apk
 
       - name: Upload Android artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: speech2code-*.apk
+          path: speech2prompt-*.apk
           retention-days: 5
 
   source:
@@ -336,14 +336,14 @@ jobs:
       - name: Create source tarball
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
-          git archive --format=tar.gz --prefix=speech2code-${VERSION}/ \
-            "v${VERSION}" > speech2code-${VERSION}-source.tar.gz
+          git archive --format=tar.gz --prefix=speech2prompt-${VERSION}/ \
+            "v${VERSION}" > speech2prompt-${VERSION}-source.tar.gz
 
       - name: Upload source artifact
         uses: actions/upload-artifact@v4
         with:
           name: source-archive
-          path: speech2code-*-source.tar.gz
+          path: speech2prompt-*-source.tar.gz
           retention-days: 5
 
   release:
@@ -372,7 +372,7 @@ jobs:
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           cat > release-notes.md << 'EOF'
-          ## Speech2Code v${{ needs.prepare.outputs.version }}
+          ## Speech2Prompt v${{ needs.prepare.outputs.version }}
           
           ### Downloads
           
@@ -393,18 +393,18 @@ jobs:
           
           **Debian/Ubuntu:**
           ```bash
-          sudo dpkg -i speech2code-${{ needs.prepare.outputs.version }}-linux-x86_64.deb
+          sudo dpkg -i speech2prompt-${{ needs.prepare.outputs.version }}-linux-x86_64.deb
           ```
           
           **Fedora/RHEL:**
           ```bash
-          sudo rpm -i speech2code-${{ needs.prepare.outputs.version }}-linux-x86_64.rpm
+          sudo rpm -i speech2prompt-${{ needs.prepare.outputs.version }}-linux-x86_64.rpm
           ```
           
           **AppImage:**
           ```bash
-          chmod +x Speech2Code-${{ needs.prepare.outputs.version }}-x86_64.AppImage
-          ./Speech2Code-${{ needs.prepare.outputs.version }}-x86_64.AppImage
+          chmod +x Speech2Prompt-${{ needs.prepare.outputs.version }}-x86_64.AppImage
+          ./Speech2Prompt-${{ needs.prepare.outputs.version }}-x86_64.AppImage
           ```
           
           #### Android

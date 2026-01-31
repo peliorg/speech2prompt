@@ -1,4 +1,4 @@
-# Speech2Code
+# Speech2Prompt
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -30,8 +30,8 @@ cd desktop
 ./scripts/install.sh
 
 # Start
-speech2code-desktop
-# Or: systemctl --user start speech2code
+speech2prompt-desktop
+# Or: systemctl --user start speech2prompt
 ```
 
 ### Android
@@ -39,7 +39,7 @@ speech2code-desktop
 1. Install the APK from releases
 2. Grant microphone and Bluetooth permissions
 3. Pair with your computer in Bluetooth settings
-4. Open Speech2Code and connect
+4. Open Speech2Prompt and connect
 
 ### First-Time Pairing
 
@@ -94,11 +94,11 @@ cargo build --release
 
 ## Configuration
 
-Desktop config: `~/.config/speech2code/config.toml`
+Desktop config: `~/.config/speech2prompt/config.toml`
 
 ```toml
 [bluetooth]
-device_name = "Speech2Code"
+device_name = "Speech2Prompt"
 auto_accept = true
 
 [input]
@@ -138,19 +138,19 @@ systemctl --user start ydotoold
 ```
 
 ### Permission issues on Android
-- Go to Settings > Apps > Speech2Code > Permissions
+- Go to Settings > Apps > Speech2Prompt > Permissions
 - Enable Microphone and Nearby devices (Bluetooth)
 
 ## Releases
 
 ### Installing Pre-built Packages
 
-Download the latest release from the [Releases page](https://github.com/peliorg/speech2code/releases).
+Download the latest release from the [Releases page](https://github.com/peliorg/speech2prompt/releases).
 
 **Linux:**
-- `.deb` - For Ubuntu/Debian: `sudo dpkg -i speech2code-*.deb`
-- `.rpm` - For Fedora/RHEL: `sudo rpm -i speech2code-*.rpm`
-- `.AppImage` - Universal: `chmod +x Speech2Code-*.AppImage && ./Speech2Code-*.AppImage`
+- `.deb` - For Ubuntu/Debian: `sudo dpkg -i speech2prompt-*.deb`
+- `.rpm` - For Fedora/RHEL: `sudo rpm -i speech2prompt-*.rpm`
+- `.AppImage` - Universal: `chmod +x Speech2Prompt-*.AppImage && ./Speech2Prompt-*.AppImage`
 
 **Android:**
 - `.apk` - Enable "Install from Unknown Sources", then install

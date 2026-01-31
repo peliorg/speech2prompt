@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Speech2Code
+Name=Speech2Prompt
 Comment=Voice-to-keyboard bridge
-Exec=/usr/local/bin/speech2code-desktop
-Icon=speech2code
+Exec=/usr/local/bin/speech2prompt-desktop
+Icon=speech2prompt
 Terminal=false
 Categories=Utility;Accessibility;
 Keywords=voice;speech;dictation;bluetooth;

@@ -94,6 +94,6 @@ For users upgrading from 0.1.x:
 - HMAC-SHA256 message signing
 - Secure key derivation with PBKDF2
 
-[0.2.5]: https://github.com/peliorg/speech2code/compare/v0.2.0...v0.2.5
-[0.2.0]: https://github.com/peliorg/speech2code/compare/v0.1.4...v0.2.0
-[0.1.4]: https://github.com/peliorg/speech2code/releases/tag/v0.1.4
+[0.2.5]: https://github.com/peliorg/speech2prompt/compare/v0.2.0...v0.2.5
+[0.2.0]: https://github.com/peliorg/speech2prompt/compare/v0.1.4...v0.2.0
+[0.1.4]: https://github.com/peliorg/speech2prompt/releases/tag/v0.1.4

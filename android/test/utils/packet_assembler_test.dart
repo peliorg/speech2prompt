@@ -14,8 +14,8 @@
 
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speech2code/utils/packet_assembler.dart';
-import 'package:speech2code/utils/ble_constants.dart';
+import 'package:speech2prompt/utils/packet_assembler.dart';
+import 'package:speech2prompt/utils/ble_constants.dart';
 
 void main() {
   group('PacketAssembler', () {
@@ -57,7 +57,9 @@ void main() {
       const mtu = 512;
 
       expect(
-          () => PacketAssembler.chunkMessage(data, mtu), throwsArgumentError);
+        () => PacketAssembler.chunkMessage(data, mtu),
+        throwsArgumentError,
+      );
     });
 
     test('respects MTU boundaries', () {
@@ -78,8 +80,17 @@ void main() {
       final reassembler = PacketReassembler();
 
       // Flags: FIRST | LAST, Seq: 0, Length: 5
-      final packet =
-          Uint8List.fromList([0x0C, 0x00, 0x05, 0x00, 1, 2, 3, 4, 5]);
+      final packet = Uint8List.fromList([
+        0x0C,
+        0x00,
+        0x05,
+        0x00,
+        1,
+        2,
+        3,
+        4,
+        5,
+      ]);
 
       final result = reassembler.addPacket(packet);
 
@@ -94,7 +105,7 @@ void main() {
       // First packet: 10 bytes total, 5 in this packet
       final packet1 = Uint8List.fromList([
         0x08, 0x00, 0x0A, 0x00, // FIRST, Seq 0, Length 10
-        1, 2, 3, 4, 5
+        1, 2, 3, 4, 5,
       ]);
 
       var result = reassembler.addPacket(packet1);
@@ -104,7 +115,7 @@ void main() {
       // Last packet: remaining 5 bytes
       final packet2 = Uint8List.fromList([
         0x04, 0x01, // LAST, Seq 1
-        6, 7, 8, 9, 10
+        6, 7, 8, 9, 10,
       ]);
 
       result = reassembler.addPacket(packet2);
@@ -118,19 +129,19 @@ void main() {
 
       final packet1 = Uint8List.fromList([
         0x08, 0x00, 0x0F, 0x00, // FIRST, Seq 0, Length 15
-        1, 2, 3, 4, 5
+        1, 2, 3, 4, 5,
       ]);
       expect(reassembler.addPacket(packet1), isNull);
 
       final packet2 = Uint8List.fromList([
         0x00, 0x01, // No flags, Seq 1
-        6, 7, 8, 9, 10
+        6, 7, 8, 9, 10,
       ]);
       expect(reassembler.addPacket(packet2), isNull);
 
       final packet3 = Uint8List.fromList([
         0x04, 0x02, // LAST, Seq 2
-        11, 12, 13, 14, 15
+        11, 12, 13, 14, 15,
       ]);
 
       final result = reassembler.addPacket(packet3);
@@ -142,8 +153,17 @@ void main() {
     test('detects sequence error', () {
       final reassembler = PacketReassembler();
 
-      final packet1 =
-          Uint8List.fromList([0x08, 0x00, 0x0A, 0x00, 1, 2, 3, 4, 5]);
+      final packet1 = Uint8List.fromList([
+        0x08,
+        0x00,
+        0x0A,
+        0x00,
+        1,
+        2,
+        3,
+        4,
+        5,
+      ]);
       expect(reassembler.addPacket(packet1), isNull);
 
       // Wrong sequence (should be 1, but is 2)
@@ -158,8 +178,17 @@ void main() {
       final reassembler = PacketReassembler();
 
       // Says 10 bytes, but only provides 8 total
-      final packet1 =
-          Uint8List.fromList([0x08, 0x00, 0x0A, 0x00, 1, 2, 3, 4, 5]);
+      final packet1 = Uint8List.fromList([
+        0x08,
+        0x00,
+        0x0A,
+        0x00,
+        1,
+        2,
+        3,
+        4,
+        5,
+      ]);
       expect(reassembler.addPacket(packet1), isNull);
 
       final packet2 = Uint8List.fromList([0x04, 0x01, 6, 7, 8]);
@@ -171,8 +200,17 @@ void main() {
     test('resets correctly', () {
       final reassembler = PacketReassembler();
 
-      final packet1 =
-          Uint8List.fromList([0x08, 0x00, 0x0A, 0x00, 1, 2, 3, 4, 5]);
+      final packet1 = Uint8List.fromList([
+        0x08,
+        0x00,
+        0x0A,
+        0x00,
+        1,
+        2,
+        3,
+        4,
+        5,
+      ]);
       reassembler.addPacket(packet1);
       expect(reassembler.isInProgress, true);
 

@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# End-to-end test script for Speech2Code
+# End-to-end test script for Speech2Prompt
 # Run this after starting both apps
 
 set -e
 
-echo "=== Speech2Code E2E Test ==="
+echo "=== Speech2Prompt E2E Test ==="
 echo ""
 
 # Check if Linux app is running
-if ! pgrep -f "speech2code-desktop" > /dev/null; then
+if ! pgrep -f "speech2prompt-desktop" > /dev/null; then
     echo "ERROR: Linux desktop app is not running"
     echo "Start it with: cd desktop && cargo run"
     exit 1
@@ -34,7 +34,7 @@ echo ""
 echo "Manual test steps:"
 echo ""
 echo "1. On Android:"
-echo "   - Open Speech2Code app"
+echo "   - Open Speech2Prompt app"
 echo "   - Tap 'Connect' or Bluetooth icon"
 echo "   - Select your computer from the list"
 echo "   - Enter a 6-digit PIN when prompted"

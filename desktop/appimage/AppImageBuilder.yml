@@ -2,11 +2,11 @@ version: 1
 AppDir:
   path: ./AppDir
   app_info:
-    id: com.speech2code.desktop
-    name: Speech2Code
-    icon: speech2code
+    id: com.speech2prompt.desktop
+    name: Speech2Prompt
+    icon: speech2prompt
     version: !ENV ${VERSION}
-    exec: usr/bin/speech2code-desktop
+    exec: usr/bin/speech2prompt-desktop
     exec_args: $@
   
   apt:
@@ -34,4 +34,4 @@ AppDir:
 AppImage:
   arch: x86_64
   comp: gzip
-  update-information: gh-releases-zsync|yourusername|speech2code|latest|Speech2Code-*x86_64.AppImage.zsync
+  update-information: gh-releases-zsync|yourusername|speech2prompt|latest|Speech2Prompt-*x86_64.AppImage.zsync

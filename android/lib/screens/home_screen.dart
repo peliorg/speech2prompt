@@ -52,7 +52,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final speechService = context.read<SpeechService>();
-    
+
     if (state == AppLifecycleState.paused) {
       // Pause listening when app goes to background
       if (speechService.isListening) {
@@ -132,7 +132,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ConnectionBadge(
                         state: bluetooth.state,
                         deviceName: bluetooth.connectedDevice?.displayName,
-                        onTap: () => Navigator.pushNamed(context, '/connection'),
+                        onTap: () =>
+                            Navigator.pushNamed(context, '/connection'),
                       ),
 
                       const SizedBox(height: 40),
@@ -156,9 +157,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       // Status text
                       Text(
                         _getStatusText(speech, bluetooth),
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: Colors.white70,
-                            ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleLarge?.copyWith(color: Colors.white70),
                       ),
 
                       // Error message
@@ -211,10 +212,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Row(
         children: [
           const SizedBox(width: 8),
-          Text(
-            'Speech2Code',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
+          Text('Speech2Prompt', style: Theme.of(context).textTheme.titleLarge),
           const Spacer(),
           IconButton(
             icon: const Icon(Icons.settings),

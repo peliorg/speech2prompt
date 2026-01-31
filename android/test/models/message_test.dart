@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speech2code/models/message.dart';
+import 'package:speech2prompt/models/message.dart';
 
 void main() {
   group('Message', () {

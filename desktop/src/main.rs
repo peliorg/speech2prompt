@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Speech2Code Desktop Application
+//! Speech2Prompt Desktop Application
 
 mod bluetooth;
 mod commands;
@@ -49,12 +49,12 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .with(
             tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("speech2code_desktop=info".parse().unwrap()),
+                .add_directive("speech2prompt_desktop=info".parse().unwrap()),
         )
         .init();
 
     info!(
-        "Starting Speech2Code Desktop v{}...",
+        "Starting Speech2Prompt Desktop v{}...",
         env!("CARGO_PKG_VERSION")
     );
 
@@ -69,7 +69,7 @@ async fn main() -> Result<()> {
     // Initialize GTK (required for PIN dialog)
     gtk4::init().expect("Failed to initialize GTK");
     let gtk_app = gtk4::Application::builder()
-        .application_id("com.speech2code.desktop")
+        .application_id("com.speech2prompt.desktop")
         .build();
     // Register the application so windows can be created
     gtk_app.register(None::<&gtk4::gio::Cancellable>)?;
@@ -232,6 +232,6 @@ async fn main() -> Result<()> {
         }
     }
 
-    info!("Speech2Code Desktop stopped");
+    info!("Speech2Prompt Desktop stopped");
     Ok(())
 }

@@ -2,15 +2,15 @@
 set -e
 
 # Stop the service if running
-if systemctl --user is-active speech2code >/dev/null 2>&1; then
-    systemctl --user stop speech2code || true
+if systemctl --user is-active speech2prompt >/dev/null 2>&1; then
+    systemctl --user stop speech2prompt || true
 fi
 
 # Disable the service if enabled
-if systemctl --user is-enabled speech2code >/dev/null 2>&1; then
-    systemctl --user disable speech2code || true
+if systemctl --user is-enabled speech2prompt >/dev/null 2>&1; then
+    systemctl --user disable speech2prompt || true
 fi
 
-echo "Speech2Code service stopped and disabled"
+echo "Speech2Prompt service stopped and disabled"
 
 exit 0

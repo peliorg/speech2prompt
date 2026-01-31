@@ -1,8 +1,8 @@
-# Speech2Code Communication Protocol
+# Speech2Prompt Communication Protocol
 
 ## Overview
 
-This document defines the communication protocol between the Speech2Code Android app and Linux desktop app over Bluetooth RFCOMM (Serial Port Profile).
+This document defines the communication protocol between the Speech2Prompt Android app and Linux desktop app over Bluetooth RFCOMM (Serial Port Profile).
 
 ## Transport Layer
 
@@ -166,7 +166,7 @@ Pairing acknowledgment sent by Linux after successful pairing.
    ```
    shared_secret = PBKDF2(
      password = PIN + android_device_id + linux_device_id,
-     salt = "speech2code_v1",
+     salt = "speech2prompt_v1",
      iterations = 100000,
      key_length = 32
    )

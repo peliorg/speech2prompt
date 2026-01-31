@@ -43,11 +43,11 @@ void main() {
     ),
   );
 
-  runApp(const Speech2CodeApp());
+  runApp(const Speech2PromptApp());
 }
 
-class Speech2CodeApp extends StatelessWidget {
-  const Speech2CodeApp({super.key});
+class Speech2PromptApp extends StatelessWidget {
+  const Speech2PromptApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +57,7 @@ class Speech2CodeApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => BleService()..initialize()),
       ],
       child: MaterialApp(
-        title: 'Speech2Code',
+        title: 'Speech2Prompt',
         debugShowCheckedModeBanner: false,
         theme: _buildTheme(),
         initialRoute: '/',
@@ -105,9 +105,7 @@ class Speech2CodeApp extends StatelessWidget {
       cardTheme: CardThemeData(
         color: surfaceColor,
         elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       listTileTheme: const ListTileThemeData(
         iconColor: Colors.white70,
@@ -132,15 +130,11 @@ class Speech2CodeApp extends StatelessWidget {
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: primaryColor,
-        ),
+        style: TextButton.styleFrom(foregroundColor: primaryColor),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -153,19 +147,16 @@ class Speech2CodeApp extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: primaryColor, width: 2),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
-      dividerTheme: const DividerThemeData(
-        color: Colors.white12,
-        thickness: 1,
-      ),
+      dividerTheme: const DividerThemeData(color: Colors.white12, thickness: 1),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: surfaceColor,
         contentTextStyle: const TextStyle(color: Colors.white),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         behavior: SnackBarBehavior.floating,
       ),
     );

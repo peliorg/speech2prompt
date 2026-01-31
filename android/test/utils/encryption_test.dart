@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:speech2code/utils/encryption.dart';
-import 'package:speech2code/models/message.dart';
+import 'package:speech2prompt/utils/encryption.dart';
+import 'package:speech2prompt/models/message.dart';
 
 void main() {
   group('Key Derivation', () {

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Generate icon assets for Speech2Code
+# Generate icon assets for Speech2Prompt
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -20,7 +20,7 @@ fi
 echo "Generating placeholder icons..."
 
 # Create SVG source
-cat > "$ICON_DIR/speech2code.svg" << 'EOF'
+cat > "$ICON_DIR/speech2prompt.svg" << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -43,14 +43,14 @@ EOF
 
 # Generate PNG sizes
 for size in 16 32 48 64 128 256 512; do
-    convert -background none "$ICON_DIR/speech2code.svg" -resize ${size}x${size} "$ICON_DIR/speech2code-${size}.png"
+    convert -background none "$ICON_DIR/speech2prompt.svg" -resize ${size}x${size} "$ICON_DIR/speech2prompt-${size}.png"
 done
 
 # Create standard icon
-cp "$ICON_DIR/speech2code-256.png" "$ICON_DIR/speech2code.png"
+cp "$ICON_DIR/speech2prompt-256.png" "$ICON_DIR/speech2prompt.png"
 
 # Create ICO for potential Windows support
-convert "$ICON_DIR/speech2code-16.png" "$ICON_DIR/speech2code-32.png" "$ICON_DIR/speech2code-48.png" "$ICON_DIR/speech2code.ico" 2>/dev/null || true
+convert "$ICON_DIR/speech2prompt-16.png" "$ICON_DIR/speech2prompt-32.png" "$ICON_DIR/speech2prompt-48.png" "$ICON_DIR/speech2prompt.ico" 2>/dev/null || true
 
 echo "Icons generated in: $ICON_DIR"
 ls -la "$ICON_DIR"

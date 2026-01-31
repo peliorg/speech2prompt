@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// BLE service and characteristic UUIDs for Speech2Code.
+// BLE service and characteristic UUIDs for Speech2Prompt.
 
-/// Speech2Code GATT service UUID.
-const String speech2codeServiceUuid = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+/// Speech2Prompt GATT service UUID.
+const String speech2promptServiceUuid = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 /// Command RX characteristic UUID (Android writes commands here).
 /// Properties: Write, Write Without Response

@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
 
-# Speech2Code Desktop Uninstallation Script
+# Speech2Prompt Desktop Uninstallation Script
 
 INSTALL_MODE="${1:---user}"
 
 echo "=========================================="
-echo " Speech2Code Desktop Uninstaller"
+echo " Speech2Prompt Desktop Uninstaller"
 echo "=========================================="
 echo ""
 
@@ -31,16 +31,16 @@ fi
 
 # Stop service
 echo "Stopping service..."
-systemctl --user stop speech2code 2>/dev/null || true
-systemctl --user disable speech2code 2>/dev/null || true
+systemctl --user stop speech2prompt 2>/dev/null || true
+systemctl --user disable speech2prompt 2>/dev/null || true
 
 # Remove files
 echo "Removing files..."
-rm -f "$BIN_DIR/speech2code-desktop"
-rm -f "$DESKTOP_DIR/speech2code.desktop"
-rm -f "$ICON_DIR/speech2code.png"
-rm -f "$SYSTEMD_DIR/speech2code.service"
-[ -n "$AUTOSTART_DIR" ] && rm -f "$AUTOSTART_DIR/speech2code.desktop"
+rm -f "$BIN_DIR/speech2prompt-desktop"
+rm -f "$DESKTOP_DIR/speech2prompt.desktop"
+rm -f "$ICON_DIR/speech2prompt.png"
+rm -f "$SYSTEMD_DIR/speech2prompt.service"
+[ -n "$AUTOSTART_DIR" ] && rm -f "$AUTOSTART_DIR/speech2prompt.desktop"
 
 # Reload systemd
 systemctl --user daemon-reload 2>/dev/null || true
@@ -49,8 +49,8 @@ echo ""
 echo "Uninstallation complete!"
 echo ""
 echo "Note: Configuration and data files were preserved in:"
-echo "  ~/.config/speech2code/"
-echo "  ~/.local/share/speech2code/"
+echo "  ~/.config/speech2prompt/"
+echo "  ~/.local/share/speech2prompt/"
 echo ""
 echo "To remove all data, run:"
-echo "  rm -rf ~/.config/speech2code ~/.local/share/speech2code"
+echo "  rm -rf ~/.config/speech2prompt ~/.local/share/speech2prompt"

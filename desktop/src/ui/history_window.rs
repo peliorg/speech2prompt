@@ -28,7 +28,7 @@ use crate::storage::{EntryType, History, HistoryEntry};
 pub fn show_history_window(app: &Application, history: Arc<History>) {
     let window = ApplicationWindow::builder()
         .application(app)
-        .title("Speech2Code - History")
+        .title("Speech2Prompt - History")
         .default_width(600)
         .default_height(400)
         .build();
@@ -47,7 +47,7 @@ pub fn show_history_window(app: &Application, history: Arc<History>) {
         .build();
     let search_button = Button::with_label("Search");
     let clear_button = Button::with_label("Clear Search");
-    
+
     search_box.append(&search_entry);
     search_box.append(&search_button);
     search_box.append(&clear_button);
@@ -67,11 +67,11 @@ pub fn show_history_window(app: &Application, history: Arc<History>) {
     // Action buttons
     let button_box = GtkBox::new(Orientation::Horizontal, 8);
     button_box.set_halign(gtk4::Align::End);
-    
+
     let export_button = Button::with_label("Export...");
     let clear_history_button = Button::with_label("Clear History");
     let close_button = Button::with_label("Close");
-    
+
     button_box.append(&export_button);
     button_box.append(&clear_history_button);
     button_box.append(&close_button);
@@ -90,7 +90,11 @@ pub fn show_history_window(app: &Application, history: Arc<History>) {
     let search_entry_clone = search_entry.clone();
     search_button.connect_clicked(move |_| {
         let query = search_entry_clone.text().to_string();
-        let query_opt = if query.is_empty() { None } else { Some(query.as_str()) };
+        let query_opt = if query.is_empty() {
+            None
+        } else {
+            Some(query.as_str())
+        };
         populate_history(&list_box_search, &history_search, query_opt);
     });
 
@@ -108,7 +112,11 @@ pub fn show_history_window(app: &Application, history: Arc<History>) {
     let list_box_enter = list_box.clone();
     search_entry.connect_activate(move |entry| {
         let query = entry.text().to_string();
-        let query_opt = if query.is_empty() { None } else { Some(query.as_str()) };
+        let query_opt = if query.is_empty() {
+            None
+        } else {
+            Some(query.as_str())
+        };
         populate_history(&list_box_enter, &history_enter, query_opt);
     });
 
@@ -125,8 +133,8 @@ pub fn show_history_window(app: &Application, history: Arc<History>) {
                 ("Save", gtk4::ResponseType::Accept),
             ],
         );
-        dialog.set_current_name("speech2code_history.txt");
-        
+        dialog.set_current_name("speech2prompt_history.txt");
+
         let history_dialog = history_export.clone();
         dialog.connect_response(move |dialog, response| {
             if response == gtk4::ResponseType::Accept {
@@ -142,7 +150,7 @@ pub fn show_history_window(app: &Application, history: Arc<History>) {
             }
             dialog.close();
         });
-        
+
         dialog.show();
     });
 
@@ -159,7 +167,7 @@ pub fn show_history_window(app: &Application, history: Arc<History>) {
             "Clear all history?",
         );
         dialog.set_secondary_text(Some("This action cannot be undone."));
-        
+
         let history_confirm = history_clear_all.clone();
         let list_box_confirm = list_box_clear_all.clone();
         dialog.connect_response(move |dialog, response| {
@@ -172,7 +180,7 @@ pub fn show_history_window(app: &Application, history: Arc<History>) {
             }
             dialog.close();
         });
-        
+
         dialog.show();
     });
 
@@ -216,7 +224,7 @@ fn populate_history(list_box: &ListBox, history: &History, query: Option<&str>) 
 /// Create a list box row for a history entry.
 fn create_history_row(entry: &HistoryEntry) -> ListBoxRow {
     let row = ListBoxRow::new();
-    
+
     let hbox = GtkBox::new(Orientation::Horizontal, 8);
     hbox.set_margin_top(4);
     hbox.set_margin_bottom(4);

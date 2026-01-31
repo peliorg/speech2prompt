@@ -17,7 +17,7 @@
 //! Usage: cargo run --bin test_input -- [text|key|combo]
 
 use anyhow::Result;
-use speech2code_desktop::input::{create_injector, Key, Modifier};
+use speech2prompt_desktop::input::{create_injector, Key, Modifier};
 use std::env;
 use std::thread;
 use std::time::Duration;
@@ -39,7 +39,7 @@ fn main() -> Result<()> {
     match mode {
         "text" => {
             println!("Typing test text...");
-            injector.type_text("Hello from Speech2Code!")?;
+            injector.type_text("Hello from Speech2Prompt!")?;
             println!("Done!");
         }
         "key" => {
@@ -54,23 +54,23 @@ fn main() -> Result<()> {
         }
         "full" => {
             println!("Running full test sequence...");
-            
+
             // Type some text
             injector.type_text("Line 1")?;
             thread::sleep(Duration::from_millis(100));
-            
+
             // Press Enter
             injector.press_key(Key::Enter)?;
             thread::sleep(Duration::from_millis(100));
-            
+
             // Type more text
             injector.type_text("Line 2")?;
             thread::sleep(Duration::from_millis(100));
-            
+
             // Select all
             injector.key_combo(&[Modifier::Ctrl], Key::A)?;
             thread::sleep(Duration::from_millis(500));
-            
+
             println!("Done! Text should be selected.");
         }
         _ => {

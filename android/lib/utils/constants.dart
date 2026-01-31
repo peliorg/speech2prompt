@@ -28,4 +28,4 @@ const int maxReconnectAttempts = 5;
 const int reconnectBaseDelayMs = 1000;
 
 /// App name.
-const String appName = 'Speech2Code';
+const String appName = 'Speech2Prompt';

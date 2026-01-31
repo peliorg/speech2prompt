@@ -1,10 +1,10 @@
 #!/bin/bash
-# Speech2Code - Install System Dependencies
+# Speech2Prompt - Install System Dependencies
 # Run with: sudo ./install-deps.sh
 
 set -e
 
-echo "Installing system development libraries for Speech2Code..."
+echo "Installing system development libraries for Speech2Prompt..."
 
 apt update
 

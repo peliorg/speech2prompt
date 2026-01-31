@@ -117,7 +117,7 @@ class BleService extends ChangeNotifier {
     }
   }
 
-  /// Start scanning for BLE devices with Speech2Code service.
+  /// Start scanning for BLE devices with Speech2Prompt service.
   Future<Stream<List<BleDeviceInfo>>> startScan() async {
     debugPrint('BleService: Starting BLE scan...');
 
@@ -128,7 +128,7 @@ class BleService extends ChangeNotifier {
 
     // Start scanning with service filter
     await FlutterBluePlus.startScan(
-      withServices: [Guid(speech2codeServiceUuid)],
+      withServices: [Guid(speech2promptServiceUuid)],
       timeout: BleConfig.scanTimeout,
     );
 
@@ -136,7 +136,7 @@ class BleService extends ChangeNotifier {
     return FlutterBluePlus.scanResults.map((results) {
       return results
           .map((r) => BleDeviceInfo.fromScanResult(r))
-          .where((d) => d.hasS2CService) // Only Speech2Code devices
+          .where((d) => d.hasS2CService) // Only Speech2Prompt devices
           .toList();
     });
   }
@@ -193,12 +193,12 @@ class BleService extends ChangeNotifier {
       debugPrint('BleService: Discovering services...');
       final services = await device.discoverServices();
 
-      // Find Speech2Code service
+      // Find Speech2Prompt service
       final s2cService = services.firstWhere(
         (s) =>
             s.uuid.toString().toLowerCase() ==
-            speech2codeServiceUuid.toLowerCase(),
-        orElse: () => throw Exception('Speech2Code service not found'),
+            speech2promptServiceUuid.toLowerCase(),
+        orElse: () => throw Exception('Speech2Prompt service not found'),
       );
 
       // Get characteristics

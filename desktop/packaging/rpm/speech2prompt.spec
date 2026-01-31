@@ -1,10 +1,10 @@
-Name:           speech2code
+Name:           speech2prompt
 Version:        VERSION
 Release:        1%{?dist}
 Summary:        Voice-to-keyboard bridge for seamless dictation
 
 License:        Apache-2.0
-URL:            https://github.com/peliorg/speech2code
+URL:            https://github.com/peliorg/speech2prompt
 Source0:        %{name}-%{version}.tar.gz
 
 # BuildRequires are not needed since we're packaging a pre-built binary
@@ -28,7 +28,7 @@ Requires:       sqlite-libs
 Recommends:     ydotool
 
 %description
-Speech2Code is a voice-to-keyboard bridge application that allows
+Speech2Prompt is a voice-to-keyboard bridge application that allows
 Android devices to transmit speech-to-text to a Linux desktop via
 Bluetooth for seamless dictation and voice commands.
 
@@ -57,18 +57,18 @@ install -d %{buildroot}%{_datadir}/icons/hicolor/256x256/apps
 install -d %{buildroot}%{_prefix}/lib/systemd/user
 
 # Install binary
-install -m 755 speech2code-desktop %{buildroot}%{_bindir}/speech2code-desktop
+install -m 755 speech2prompt-desktop %{buildroot}%{_bindir}/speech2prompt-desktop
 
 # Install desktop file
-install -m 644 speech2code.desktop %{buildroot}%{_datadir}/applications/
+install -m 644 speech2prompt.desktop %{buildroot}%{_datadir}/applications/
 
 # Install systemd service
-install -m 644 speech2code.service %{buildroot}%{_prefix}/lib/systemd/user/
+install -m 644 speech2prompt.service %{buildroot}%{_prefix}/lib/systemd/user/
 
 %files
-%{_bindir}/speech2code-desktop
-%{_datadir}/applications/speech2code.desktop
-%{_prefix}/lib/systemd/user/speech2code.service
+%{_bindir}/speech2prompt-desktop
+%{_datadir}/applications/speech2prompt.desktop
+%{_prefix}/lib/systemd/user/speech2prompt.service
 
 %post
 # Update desktop database
@@ -84,17 +84,17 @@ fi
 cat <<EOF
 
 ==========================================
- Speech2Code Desktop installed!
+ Speech2Prompt Desktop installed!
 ==========================================
 
-To start Speech2Code:
-  systemctl --user start speech2code
+To start Speech2Prompt:
+  systemctl --user start speech2prompt
 
 To enable autostart:
-  systemctl --user enable speech2code
+  systemctl --user enable speech2prompt
 
 Or run from application menu or command line:
-  speech2code-desktop
+  speech2prompt-desktop
 
 Make sure Bluetooth is enabled:
   sudo systemctl enable bluetooth
@@ -105,8 +105,8 @@ EOF
 %preun
 # Stop and disable service before removal
 if [ $1 -eq 0 ] ; then
-    systemctl --user stop speech2code &> /dev/null || :
-    systemctl --user disable speech2code &> /dev/null || :
+    systemctl --user stop speech2prompt &> /dev/null || :
+    systemctl --user disable speech2prompt &> /dev/null || :
 fi
 
 %postun

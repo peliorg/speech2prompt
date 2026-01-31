@@ -1,4 +1,4 @@
-# speech2code
+# speech2prompt
 
 A new Flutter project.
 

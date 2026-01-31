@@ -76,10 +76,10 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
         if (mounted) {
           setState(() {
             _devices = devices;
-            // Sort: Speech2Code devices first, then by name
+            // Sort: Speech2Prompt devices first, then by name
             _devices.sort((a, b) {
-              if (a.isSpeech2Code && !b.isSpeech2Code) return -1;
-              if (!a.isSpeech2Code && b.isSpeech2Code) return 1;
+              if (a.isSpeech2Prompt && !b.isSpeech2Prompt) return -1;
+              if (!a.isSpeech2Prompt && b.isSpeech2Prompt) return 1;
               return a.displayName.compareTo(b.displayName);
             });
           });
@@ -342,12 +342,12 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
             const Icon(Icons.devices, size: 64),
             const SizedBox(height: 16),
             const Text(
-              'No Speech2Code servers found',
+              'No Speech2Prompt servers found',
               style: TextStyle(fontSize: 18),
             ),
             const SizedBox(height: 8),
             const Text(
-              'Make sure the Speech2Code server is running on your computer and try scanning again.',
+              'Make sure the Speech2Prompt server is running on your computer and try scanning again.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -373,7 +373,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
 
         return ListTile(
           leading: Icon(
-            device.isSpeech2Code ? Icons.computer : Icons.bluetooth,
+            device.isSpeech2Prompt ? Icons.computer : Icons.bluetooth,
             color: isConnected ? Colors.green : null,
           ),
           title: Text(device.displayName),

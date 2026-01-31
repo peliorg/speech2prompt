@@ -14,16 +14,12 @@ void main() {
     // Full app tests with BLE require device/emulator
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Text('Speech2Code'),
-          ),
-        ),
+        home: Scaffold(body: Center(child: Text('Speech2Prompt'))),
       ),
     );
 
     // Verify that the app can render basic widgets
     expect(find.byType(MaterialApp), findsOneWidget);
-    expect(find.text('Speech2Code'), findsOneWidget);
+    expect(find.text('Speech2Prompt'), findsOneWidget);
   });
 }
