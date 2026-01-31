@@ -1,6 +1,6 @@
 [package]
 name = "speech2code-desktop"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Speech2Code Team"]
 description = "Linux desktop companion for Speech2Code voice-to-keyboard bridge"
