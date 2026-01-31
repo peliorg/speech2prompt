@@ -75,9 +75,14 @@ jobs:
       - name: Commit version changes
         if: steps.check_tag.outputs.tag_exists == 'false'
         run: |
-          git add desktop/Cargo.toml android/pubspec.yaml
-          git commit -m "chore: bump version to ${{ inputs.version }}"
-          git push origin main
+          # Check if there are actual changes to commit
+          if git diff --quiet desktop/Cargo.toml android/pubspec.yaml; then
+            echo "Version files already up to date, skipping commit"
+          else
+            git add desktop/Cargo.toml android/pubspec.yaml
+            git commit -m "chore: bump version to ${{ inputs.version }}"
+            git push origin main
+          fi
 
       - name: Create and push tag
         if: steps.check_tag.outputs.tag_exists == 'false'
