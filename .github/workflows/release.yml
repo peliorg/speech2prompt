@@ -58,31 +58,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Update desktop version (Cargo.toml)
+      - name: Verify version in source files
         run: |
-          sed -i 's/^version = ".*"/version = "${{ inputs.version }}"/' desktop/Cargo.toml
-          echo "Updated desktop/Cargo.toml to version ${{ inputs.version }}"
-          grep '^version =' desktop/Cargo.toml
-
-      - name: Update Android version (pubspec.yaml)
-        run: |
-          # Calculate build number from GitHub run number
-          BUILD_NUMBER=${{ github.run_number }}
-          sed -i "s/^version: .*/version: ${{ inputs.version }}+${BUILD_NUMBER}/" android/pubspec.yaml
-          echo "Updated android/pubspec.yaml to version ${{ inputs.version }}+${BUILD_NUMBER}"
-          grep '^version:' android/pubspec.yaml
-
-      - name: Commit version changes
-        if: steps.check_tag.outputs.tag_exists == 'false'
-        run: |
-          # Check if there are actual changes to commit
-          if git diff --quiet desktop/Cargo.toml android/pubspec.yaml; then
-            echo "Version files already up to date, skipping commit"
-          else
-            git add desktop/Cargo.toml android/pubspec.yaml
-            git commit -m "chore: bump version to ${{ inputs.version }}"
-            git push origin main
+          # Check that the version in Cargo.toml matches the requested version
+          CARGO_VERSION=$(grep '^version = ' desktop/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          if [ "$CARGO_VERSION" != "${{ inputs.version }}" ]; then
+            echo "Error: Version mismatch! Cargo.toml has $CARGO_VERSION but requested ${{ inputs.version }}"
+            echo "Please update the version in desktop/Cargo.toml and android/pubspec.yaml before running the release."
+            exit 1
           fi
+          echo "Version ${{ inputs.version }} verified in source files"
 
       - name: Create and push tag
         if: steps.check_tag.outputs.tag_exists == 'false'
