@@ -13,9 +13,9 @@
 // limitations under the License.
 
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
-import 'package:encrypt/encrypt.dart';
 import 'package:pointycastle/export.dart';
 import '../models/message.dart';
 
@@ -62,7 +62,12 @@ class CryptoContext {
 
   /// Verify a message checksum.
   bool verifyChecksum(
-      int version, String msgType, String payload, int timestamp, String expected) {
+    int version,
+    String msgType,
+    String payload,
+    int timestamp,
+    String expected,
+  ) {
     final calculated = checksum(version, msgType, payload, timestamp);
     return calculated == expected;
   }
@@ -119,19 +124,32 @@ Uint8List deriveKey(String pin, String androidId, String linuxId) {
   return derivator.process(Uint8List.fromList(passwordBytes));
 }
 
+/// Generate cryptographically secure random bytes.
+Uint8List _generateSecureRandom(int length) {
+  final secureRandom = FortunaRandom();
+  final seedSource = Uint8List(32);
+  final random = Random.secure();
+  for (int i = 0; i < 32; i++) {
+    seedSource[i] = random.nextInt(256);
+  }
+  secureRandom.seed(KeyParameter(seedSource));
+  return secureRandom.nextBytes(length);
+}
+
 /// Encrypt plaintext using AES-256-GCM.
 /// Returns base64(nonce || ciphertext || tag).
 String encryptAesGcm(String plaintext, Uint8List key) {
-  // Generate random 12-byte nonce
-  final iv = IV.fromSecureRandom(12);
-  
-  final encrypter = Encrypter(AES(Key(key), mode: AESMode.gcm));
-  final encrypted = encrypter.encrypt(plaintext, iv: iv);
+  final nonce = _generateSecureRandom(12);
 
-  // Combine nonce and ciphertext
-  final combined = Uint8List(iv.bytes.length + encrypted.bytes.length);
-  combined.setAll(0, iv.bytes);
-  combined.setAll(iv.bytes.length, encrypted.bytes);
+  final cipher = GCMBlockCipher(AESEngine())
+    ..init(true, AEADParameters(KeyParameter(key), 128, nonce, Uint8List(0)));
+
+  final plaintextBytes = Uint8List.fromList(utf8.encode(plaintext));
+  final ciphertext = cipher.process(plaintextBytes);
+
+  final combined = Uint8List(nonce.length + ciphertext.length);
+  combined.setAll(0, nonce);
+  combined.setAll(nonce.length, ciphertext);
 
   return base64.encode(combined);
 }
@@ -140,27 +158,35 @@ String encryptAesGcm(String plaintext, Uint8List key) {
 /// Expects base64(nonce || ciphertext || tag).
 String decryptAesGcm(String ciphertext, Uint8List key) {
   final combined = base64.decode(ciphertext);
-  
-  if (combined.length < 12) {
+
+  if (combined.length < 12 + 16) {
     throw ArgumentError('Ciphertext too short');
   }
 
-  final iv = IV(Uint8List.fromList(combined.sublist(0, 12)));
-  final encryptedBytes = Uint8List.fromList(combined.sublist(12));
+  final nonce = Uint8List.fromList(combined.sublist(0, 12));
+  final encryptedWithTag = Uint8List.fromList(combined.sublist(12));
 
-  final encrypter = Encrypter(AES(Key(key), mode: AESMode.gcm));
-  final encrypted = Encrypted(encryptedBytes);
+  final cipher = GCMBlockCipher(AESEngine())
+    ..init(false, AEADParameters(KeyParameter(key), 128, nonce, Uint8List(0)));
 
-  return encrypter.decrypt(encrypted, iv: iv);
+  final plaintext = cipher.process(encryptedWithTag);
+
+  return utf8.decode(plaintext);
 }
 
 /// Calculate SHA-256 checksum (first 8 hex characters).
 String calculateChecksum(
-    int version, String msgType, String payload, int timestamp, Uint8List secret) {
-  final data = '$version$msgType$payload$timestamp${String.fromCharCodes(secret)}';
+  int version,
+  String msgType,
+  String payload,
+  int timestamp,
+  Uint8List secret,
+) {
+  final data =
+      '$version$msgType$payload$timestamp${String.fromCharCodes(secret)}';
   final bytes = utf8.encode(data);
   final digest = sha256.convert(bytes);
-  
+
   // Return first 8 hex characters (4 bytes)
   return digest.toString().substring(0, 8);
 }
@@ -173,7 +199,7 @@ String generateDeviceId() {
     seedSource[i] = DateTime.now().microsecondsSinceEpoch % 256;
   }
   secureRandom.seed(KeyParameter(seedSource));
-  
+
   final bytes = secureRandom.nextBytes(16);
   final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   return 'android-$hex';
