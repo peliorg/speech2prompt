@@ -17,10 +17,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Service for securely storing sensitive data.
 class SecureStorageService {
-  static const _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(
-      encryptedSharedPreferences: true,
-    ),
+  static const FlutterSecureStorage _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(),
   );
 
   // Keys
@@ -40,7 +38,7 @@ class SecureStorageService {
   /// Store paired device credentials.
   static Future<void> storePairedDevice(PairedDevice device) async {
     final devices = await getPairedDevices();
-    
+
     // Update or add
     final index = devices.indexWhere((d) => d.address == device.address);
     if (index >= 0) {
@@ -48,7 +46,7 @@ class SecureStorageService {
     } else {
       devices.add(device);
     }
-    
+
     final json = jsonEncode(devices.map((d) => d.toJson()).toList());
     await _storage.write(key: _pairedDevicesKey, value: json);
   }
@@ -57,7 +55,7 @@ class SecureStorageService {
   static Future<List<PairedDevice>> getPairedDevices() async {
     final json = await _storage.read(key: _pairedDevicesKey);
     if (json == null) return [];
-    
+
     final list = jsonDecode(json) as List;
     return list.map((e) => PairedDevice.fromJson(e)).toList();
   }
@@ -76,7 +74,7 @@ class SecureStorageService {
   static Future<void> removePairedDevice(String address) async {
     final devices = await getPairedDevices();
     devices.removeWhere((d) => d.address == address);
-    
+
     final json = jsonEncode(devices.map((d) => d.toJson()).toList());
     await _storage.write(key: _pairedDevicesKey, value: json);
   }
@@ -87,9 +85,11 @@ class SecureStorageService {
   }
 
   static String _generateDeviceId() {
-    final random = List.generate(16, (_) => 
-        (DateTime.now().microsecondsSinceEpoch % 256).toRadixString(16).padLeft(2, '0')
-    ).join();
+    final random = List.generate(
+        16,
+        (_) => (DateTime.now().microsecondsSinceEpoch % 256)
+            .toRadixString(16)
+            .padLeft(2, '0')).join();
     return 'android-$random';
   }
 }
@@ -111,18 +111,18 @@ class PairedDevice {
   });
 
   Map<String, dynamic> toJson() => {
-    'address': address,
-    'name': name,
-    'linuxDeviceId': linuxDeviceId,
-    'sharedSecret': sharedSecret,
-    'pairedAt': pairedAt.toIso8601String(),
-  };
+        'address': address,
+        'name': name,
+        'linuxDeviceId': linuxDeviceId,
+        'sharedSecret': sharedSecret,
+        'pairedAt': pairedAt.toIso8601String(),
+      };
 
   factory PairedDevice.fromJson(Map<String, dynamic> json) => PairedDevice(
-    address: json['address'],
-    name: json['name'],
-    linuxDeviceId: json['linuxDeviceId'],
-    sharedSecret: json['sharedSecret'],
-    pairedAt: DateTime.parse(json['pairedAt']),
-  );
+        address: json['address'],
+        name: json['name'],
+        linuxDeviceId: json['linuxDeviceId'],
+        sharedSecret: json['sharedSecret'],
+        pairedAt: DateTime.parse(json['pairedAt']),
+      );
 }
