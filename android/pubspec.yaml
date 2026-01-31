@@ -16,7 +16,7 @@ dependencies:
   speech_to_text: ^7.0.0
   
   # Bluetooth - migrated to BLE
-  flutter_blue_plus: ^1.31.0
+  flutter_blue_plus: ^2.1.0
   
   # State management
   provider: ^6.1.1

@@ -160,10 +160,12 @@ class BleService extends ChangeNotifier {
 
       final device = deviceInfo.device;
 
-      // Connect with timeout
+      // Connect with timeout (flutter_blue_plus 2.x requires license param)
       await device.connect(
+        license: License.free,
         timeout: BleConfig.connectionTimeout,
         autoConnect: false,
+        mtu: null, // Request MTU separately after connection
       );
 
       // Wait for connection to be established
@@ -190,7 +192,9 @@ class BleService extends ChangeNotifier {
 
       // Find Speech2Code service
       final s2cService = services.firstWhere(
-        (s) => s.uuid.toString().toLowerCase() == speech2codeServiceUuid.toLowerCase(),
+        (s) =>
+            s.uuid.toString().toLowerCase() ==
+            speech2codeServiceUuid.toLowerCase(),
         orElse: () => throw Exception('Speech2Code service not found'),
       );
 
@@ -290,7 +294,8 @@ class BleService extends ChangeNotifier {
 
   /// Handle incoming notifications from Response TX characteristic.
   void _onNotificationReceived(List<int> data) {
-    final completeMessage = _packetReassembler.addPacket(Uint8List.fromList(data));
+    final completeMessage =
+        _packetReassembler.addPacket(Uint8List.fromList(data));
 
     if (completeMessage != null) {
       try {
@@ -308,7 +313,8 @@ class BleService extends ChangeNotifier {
     if (data.isEmpty) return;
 
     final statusCode = data[0];
-    debugPrint('BleService: Status changed to 0x${statusCode.toRadixString(16)}');
+    debugPrint(
+        'BleService: Status changed to 0x${statusCode.toRadixString(16)}');
 
     // Map status codes
     switch (statusCode) {
@@ -499,7 +505,8 @@ class BleService extends ChangeNotifier {
   void _scheduleReconnect() {
     _reconnectTimer?.cancel();
 
-    final delay = Duration(seconds: 1 << _reconnectAttempts); // Exponential backoff
+    final delay =
+        Duration(seconds: 1 << _reconnectAttempts); // Exponential backoff
     debugPrint('BleService: Reconnecting in ${delay.inSeconds}s...');
 
     _reconnectTimer = Timer(delay, () async {
@@ -573,7 +580,8 @@ class BleService extends ChangeNotifier {
         pairedAt: DateTime.now(),
       );
       await SecureStorageService.storePairedDevice(pairedDevice);
-      debugPrint('BleService: Pairing stored for ${_connectedDeviceInfo?.displayName}');
+      debugPrint(
+          'BleService: Pairing stored for ${_connectedDeviceInfo?.displayName}');
     }
 
     _setState(BtConnectionState.connected);

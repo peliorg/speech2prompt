@@ -6,8 +6,11 @@
 -keep class io.flutter.** { *; }
 -keep class io.flutter.plugins.** { *; }
 
-# Bluetooth Serial
+# Bluetooth Serial (legacy)
 -keep class com.github.nickspo.flutter_bluetooth_serial.** { *; }
+
+# Flutter Blue Plus
+-keep class com.lib.flutter_blue_plus.* { *; }
 
 # Speech to Text
 -keep class com.csdcorp.speech_to_text.** { *; }
