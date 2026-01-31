@@ -1,0 +1,23 @@
+[Unit]
+Description=Speech2Code Desktop - Voice-to-keyboard bridge
+Documentation=https://github.com/yourusername/speech2code
+After=graphical-session.target bluetooth.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/speech2code-desktop
+Restart=on-failure
+RestartSec=5
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.config/speech2code %h/.local/share/speech2code
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target

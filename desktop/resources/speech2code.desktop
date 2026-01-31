@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Speech2Code
+Comment=Voice-to-keyboard bridge
+Exec=/usr/local/bin/speech2code-desktop
+Icon=speech2code
+Terminal=false
+Categories=Utility;Accessibility;
+Keywords=voice;speech;dictation;bluetooth;
+StartupNotify=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Applications

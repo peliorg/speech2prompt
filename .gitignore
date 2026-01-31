@@ -1,0 +1,33 @@
+# Rust
+desktop/target/
+**/*.rs.bk
+Cargo.lock
+
+# Flutter
+android/.dart_tool/
+android/.packages
+android/.pub-cache/
+android/.pub/
+android/build/
+android/.flutter-plugins
+android/.flutter-plugins-dependencies
+android/*.iml
+android/.idea/
+android/.metadata
+
+# IDE
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
