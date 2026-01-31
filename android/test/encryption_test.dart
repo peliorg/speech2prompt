@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:speech2code/utils/encryption.dart';
-import 'dart:typed_data';
-import 'dart:convert';
 
 void main() {
   group('Encryption Tests', () {
@@ -24,11 +22,11 @@ void main() {
 
     test('Encrypt and decrypt roundtrip', () {
       final key = deriveKey('123456', 'android-test', 'linux-test');
-      final plaintext = 'Hello, World!';
-      
+      const plaintext = 'Hello, World!';
+
       final encrypted = encryptAesGcm(plaintext, key);
       final decrypted = decryptAesGcm(encrypted, key);
-      
+
       expect(decrypted, plaintext);
     });
 

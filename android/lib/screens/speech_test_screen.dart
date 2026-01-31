@@ -76,7 +76,8 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
               // Status
               Container(
                 padding: const EdgeInsets.all(16),
-                color: speech.isListening ? Colors.green[100] : Colors.grey[200],
+                color:
+                    speech.isListening ? Colors.green[100] : Colors.grey[200],
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -101,7 +102,7 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                       height: 50,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.blue.withOpacity(speech.soundLevel),
+                        color: Colors.blue.withValues(alpha: speech.soundLevel),
                       ),
                     ),
                   ],
@@ -177,7 +178,8 @@ class _SpeechTestScreenState extends State<SpeechTestScreen> {
                                     _commands[_commands.length - 1 - index];
                                 return ListTile(
                                   dense: true,
-                                  leading: const Icon(Icons.keyboard_command_key),
+                                  leading:
+                                      const Icon(Icons.keyboard_command_key),
                                   title: Text(cmd),
                                 );
                               },

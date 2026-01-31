@@ -41,10 +41,10 @@ class ConnectionBadge extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.15),
+          color: color.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: color.withOpacity(0.3),
+            color: color.withValues(alpha: 0.3),
             width: 1,
           ),
         ),
@@ -60,7 +60,7 @@ class ConnectionBadge extends StatelessWidget {
                 color: color,
                 boxShadow: [
                   BoxShadow(
-                    color: color.withOpacity(0.5),
+                    color: color.withValues(alpha: 0.5),
                     blurRadius: 4,
                     spreadRadius: 1,
                   ),
@@ -88,7 +88,7 @@ class ConnectionBadge extends StatelessWidget {
                   Text(
                     deviceName!,
                     style: TextStyle(
-                      color: color.withOpacity(0.7),
+                      color: color.withValues(alpha: 0.7),
                       fontSize: 11,
                     ),
                   ),
@@ -108,7 +108,7 @@ class ConnectionBadge extends StatelessWidget {
             else
               Icon(
                 Icons.chevron_right,
-                color: color.withOpacity(0.7),
+                color: color.withValues(alpha: 0.7),
                 size: 18,
               ),
           ],

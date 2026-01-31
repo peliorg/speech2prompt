@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -22,7 +20,6 @@ import '../models/connection_state.dart';
 import '../services/ble_service.dart';
 import '../services/permission_service.dart';
 import '../services/secure_storage_service.dart';
-import '../utils/encryption.dart';
 
 /// Screen for managing Bluetooth connections.
 class ConnectionScreen extends StatefulWidget {
@@ -130,8 +127,8 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
         await SecureStorageService.getPairedDevice(deviceAddress);
 
     if (storedPairing != null) {
-      // Use stored credentials
-      final key = base64Decode(storedPairing.sharedSecret);
+      // Use stored credentials - key is derived from the stored shared secret
+      // but we only need the device ID for reconnection
       bluetooth.setPairingPin('', storedPairing.linuxDeviceId);
 
       final success = await bluetooth.connect(device);

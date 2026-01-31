@@ -103,7 +103,7 @@ class _AudioVisualizerState extends State<AudioVisualizer>
                   size: Size(widget.size, widget.size),
                   painter: _RipplePainter(
                     progress: _waveController.value,
-                    color: color.withOpacity(0.3),
+                    color: color.withValues(alpha: 0.3),
                     soundLevel: widget.soundLevel,
                   ),
                 );
@@ -124,7 +124,7 @@ class _AudioVisualizerState extends State<AudioVisualizer>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: color.withOpacity(0.2 + (level * 0.3)),
+                  color: color.withValues(alpha: 0.2 + (level * 0.3)),
                   width: 2,
                 ),
               ),
@@ -146,7 +146,7 @@ class _AudioVisualizerState extends State<AudioVisualizer>
                     color: color,
                     boxShadow: [
                       BoxShadow(
-                        color: color.withOpacity(0.5),
+                        color: color.withValues(alpha: 0.5),
                         blurRadius: 20 + (widget.soundLevel * 30),
                         spreadRadius: 5 + (widget.soundLevel * 10),
                       ),
@@ -191,7 +191,7 @@ class _RipplePainter extends CustomPainter {
       final opacity = (1.0 - rippleProgress) * (0.3 + soundLevel * 0.3);
 
       final paint = Paint()
-        ..color = color.withOpacity(opacity.clamp(0.0, 1.0))
+        ..color = color.withValues(alpha: opacity.clamp(0.0, 1.0))
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2;
 
@@ -245,8 +245,8 @@ class WaveformVisualizer extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 1),
             decoration: BoxDecoration(
               color: isActive
-                  ? color.withOpacity(0.5 + soundLevel * 0.5)
-                  : color.withOpacity(0.3),
+                  ? color.withValues(alpha: 0.5 + soundLevel * 0.5)
+                  : color.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           );

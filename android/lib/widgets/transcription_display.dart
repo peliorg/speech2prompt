@@ -37,13 +37,16 @@ class TranscriptionDisplay extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: hasText
-            ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
-            : Colors.white.withOpacity(0.05),
+            ? Theme.of(context)
+                .colorScheme
+                .primaryContainer
+                .withValues(alpha: 0.3)
+            : Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: hasText
-              ? Theme.of(context).colorScheme.primary.withOpacity(0.3)
-              : Colors.white.withOpacity(0.1),
+              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+              : Colors.white.withValues(alpha: 0.1),
           width: 1,
         ),
       ),
@@ -105,9 +108,8 @@ class CompactTranscription extends StatelessWidget {
   Widget build(BuildContext context) {
     if (text.isEmpty) return const SizedBox.shrink();
 
-    final displayText = text.length > maxLength
-        ? '${text.substring(0, maxLength)}...'
-        : text;
+    final displayText =
+        text.length > maxLength ? '${text.substring(0, maxLength)}...' : text;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

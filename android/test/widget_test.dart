@@ -13,7 +13,7 @@ void main() {
     // Basic test that doesn't require platform-specific features
     // Full app tests with BLE require device/emulator
     await tester.pumpWidget(
-      MaterialApp(
+      const MaterialApp(
         home: Scaffold(
           body: Center(
             child: Text('Speech2Code'),

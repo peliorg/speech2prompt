@@ -91,7 +91,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SwitchListTile(
             title: const Text('Keep screen on'),
-            subtitle: const Text('Prevent screen from sleeping while listening'),
+            subtitle:
+                const Text('Prevent screen from sleeping while listening'),
             value: _keepScreenOn,
             onChanged: (value) {
               setState(() => _keepScreenOn = value);
@@ -164,7 +165,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionHeader('Connection'),
           SwitchListTile(
             title: const Text('Auto-reconnect'),
-            subtitle: const Text('Automatically reconnect if connection is lost'),
+            subtitle:
+                const Text('Automatically reconnect if connection is lost'),
             value: _autoReconnect,
             onChanged: (value) {
               setState(() => _autoReconnect = value);
@@ -188,9 +190,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // About Section
           _buildSectionHeader('About'),
-          ListTile(
-            title: const Text('Version'),
-            subtitle: const Text('1.0.0'),
+          const ListTile(
+            title: Text('Version'),
+            subtitle: Text('1.0.0'),
           ),
           ListTile(
             title: const Text('Help & Feedback'),
@@ -229,7 +231,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _showLanguagePicker(SpeechService speechService) async {
     final locales = speechService.availableLocales;
-    
+
     final selected = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -241,7 +243,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             itemCount: locales.length,
             itemBuilder: (context, index) {
               final locale = locales[index];
-              final isSelected = locale.localeId == speechService.selectedLocale;
+              final isSelected =
+                  locale.localeId == speechService.selectedLocale;
               return ListTile(
                 title: Text(locale.name),
                 subtitle: Text(locale.localeId),

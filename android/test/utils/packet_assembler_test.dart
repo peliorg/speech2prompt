@@ -21,7 +21,7 @@ void main() {
   group('PacketAssembler', () {
     test('chunks single-packet message correctly', () {
       final data = Uint8List.fromList([1, 2, 3, 4, 5]);
-      final mtu = 512;
+      const mtu = 512;
 
       final packets = PacketAssembler.chunkMessage(data, mtu);
 
@@ -36,7 +36,7 @@ void main() {
     test('chunks multi-packet message correctly', () {
       // Create data that requires multiple packets with small MTU
       final data = Uint8List.fromList(List.generate(100, (i) => i & 0xFF));
-      final mtu = 23; // Default BLE MTU
+      const mtu = 23; // Default BLE MTU
 
       final packets = PacketAssembler.chunkMessage(data, mtu);
 
@@ -54,14 +54,15 @@ void main() {
 
     test('handles empty data', () {
       final data = Uint8List(0);
-      final mtu = 512;
+      const mtu = 512;
 
-      expect(() => PacketAssembler.chunkMessage(data, mtu), throwsArgumentError);
+      expect(
+          () => PacketAssembler.chunkMessage(data, mtu), throwsArgumentError);
     });
 
     test('respects MTU boundaries', () {
       final data = Uint8List.fromList(List.generate(1000, (i) => i & 0xFF));
-      final mtu = 50;
+      const mtu = 50;
 
       final packets = PacketAssembler.chunkMessage(data, mtu);
 
@@ -77,10 +78,8 @@ void main() {
       final reassembler = PacketReassembler();
 
       // Flags: FIRST | LAST, Seq: 0, Length: 5
-      final packet = Uint8List.fromList([
-        0x0C, 0x00, 0x05, 0x00,
-        1, 2, 3, 4, 5
-      ]);
+      final packet =
+          Uint8List.fromList([0x0C, 0x00, 0x05, 0x00, 1, 2, 3, 4, 5]);
 
       final result = reassembler.addPacket(packet);
 
@@ -143,17 +142,12 @@ void main() {
     test('detects sequence error', () {
       final reassembler = PacketReassembler();
 
-      final packet1 = Uint8List.fromList([
-        0x08, 0x00, 0x0A, 0x00,
-        1, 2, 3, 4, 5
-      ]);
+      final packet1 =
+          Uint8List.fromList([0x08, 0x00, 0x0A, 0x00, 1, 2, 3, 4, 5]);
       expect(reassembler.addPacket(packet1), isNull);
 
       // Wrong sequence (should be 1, but is 2)
-      final packet2 = Uint8List.fromList([
-        0x04, 0x02,
-        6, 7, 8, 9, 10
-      ]);
+      final packet2 = Uint8List.fromList([0x04, 0x02, 6, 7, 8, 9, 10]);
 
       final result = reassembler.addPacket(packet2);
       expect(result, isNull);
@@ -164,16 +158,11 @@ void main() {
       final reassembler = PacketReassembler();
 
       // Says 10 bytes, but only provides 8 total
-      final packet1 = Uint8List.fromList([
-        0x08, 0x00, 0x0A, 0x00,
-        1, 2, 3, 4, 5
-      ]);
+      final packet1 =
+          Uint8List.fromList([0x08, 0x00, 0x0A, 0x00, 1, 2, 3, 4, 5]);
       expect(reassembler.addPacket(packet1), isNull);
 
-      final packet2 = Uint8List.fromList([
-        0x04, 0x01,
-        6, 7, 8
-      ]);
+      final packet2 = Uint8List.fromList([0x04, 0x01, 6, 7, 8]);
 
       final result = reassembler.addPacket(packet2);
       expect(result, isNull);
@@ -182,10 +171,8 @@ void main() {
     test('resets correctly', () {
       final reassembler = PacketReassembler();
 
-      final packet1 = Uint8List.fromList([
-        0x08, 0x00, 0x0A, 0x00,
-        1, 2, 3, 4, 5
-      ]);
+      final packet1 =
+          Uint8List.fromList([0x08, 0x00, 0x0A, 0x00, 1, 2, 3, 4, 5]);
       reassembler.addPacket(packet1);
       expect(reassembler.isInProgress, true);
 
@@ -198,10 +185,7 @@ void main() {
       final reassembler = PacketReassembler();
 
       // Continuation packet without FIRST
-      final packet = Uint8List.fromList([
-        0x00, 0x01,
-        1, 2, 3
-      ]);
+      final packet = Uint8List.fromList([0x00, 0x01, 1, 2, 3]);
 
       final result = reassembler.addPacket(packet);
       expect(result, isNull);
@@ -222,7 +206,7 @@ void main() {
       final originalData = Uint8List.fromList(
         List.generate(200, (i) => i & 0xFF),
       );
-      final mtu = 23; // Small MTU to force multiple packets
+      const mtu = 23; // Small MTU to force multiple packets
 
       // Chunk
       final packets = PacketAssembler.chunkMessage(originalData, mtu);
@@ -247,7 +231,7 @@ void main() {
       final originalData = Uint8List.fromList(
         List.generate(2000, (i) => (i * 7) & 0xFF), // Pseudo-random pattern
       );
-      final mtu = 512;
+      const mtu = 512;
 
       final packets = PacketAssembler.chunkMessage(originalData, mtu);
       final reassembler = PacketReassembler();

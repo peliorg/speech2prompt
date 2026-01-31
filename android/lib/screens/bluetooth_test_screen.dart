@@ -34,7 +34,7 @@ class _BluetoothTestScreenState extends State<BluetoothTestScreen> {
   @override
   void initState() {
     super.initState();
-    
+
     final bluetooth = context.read<BleService>();
     bluetooth.onMessageReceived = (message) {
       _addLog('RX: ${message.messageType.value} - ${message.payload}');
@@ -59,18 +59,18 @@ class _BluetoothTestScreenState extends State<BluetoothTestScreen> {
 
     final bluetooth = context.read<BleService>();
     final message = Message.text(text);
-    
+
     _addLog('TX: TEXT - $text');
     final success = await bluetooth.sendMessage(message);
     _addLog(success ? 'Sent successfully' : 'Send failed');
-    
+
     _textController.clear();
   }
 
   Future<void> _sendCommand(String command) async {
     final bluetooth = context.read<BleService>();
     final message = Message.command(command);
-    
+
     _addLog('TX: COMMAND - $command');
     final success = await bluetooth.sendMessage(message);
     _addLog(success ? 'Sent successfully' : 'Send failed');
@@ -98,8 +98,8 @@ class _BluetoothTestScreenState extends State<BluetoothTestScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 color: bluetooth.isConnected
-                    ? Colors.green.withOpacity(0.2)
-                    : Colors.red.withOpacity(0.2),
+                    ? Colors.green.withValues(alpha: 0.2)
+                    : Colors.red.withValues(alpha: 0.2),
                 child: Row(
                   children: [
                     Icon(

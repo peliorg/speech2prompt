@@ -79,13 +79,13 @@ class SpeechService extends ChangeNotifier {
       if (_isInitialized) {
         // Load available locales
         _availableLocales = await _speech.locales();
-        
+
         // Find system locale or use default
         final systemLocale = await _speech.systemLocale();
         if (systemLocale != null) {
           _selectedLocale = systemLocale.localeId;
         }
-        
+
         _errorMessage = null;
         debugPrint('SpeechService: Initialized with locale $_selectedLocale');
       } else {
@@ -132,9 +132,11 @@ class SpeechService extends ChangeNotifier {
         localeId: _selectedLocale,
         listenFor: _listenFor,
         pauseFor: _pauseFor,
-        partialResults: true,
-        cancelOnError: false,
-        listenMode: ListenMode.dictation,
+        listenOptions: SpeechListenOptions(
+          partialResults: true,
+          cancelOnError: false,
+          listenMode: ListenMode.dictation,
+        ),
       );
 
       _isListening = true;
@@ -186,7 +188,7 @@ class SpeechService extends ChangeNotifier {
   /// Handle speech recognition results.
   void _handleResult(SpeechRecognitionResult result) {
     final text = result.recognizedWords;
-    
+
     if (text.isEmpty) return;
 
     _currentText = text;
@@ -205,18 +207,22 @@ class SpeechService extends ChangeNotifier {
   void _processFinalResult(String text) {
     // Check for local commands (stop/start listening)
     final lowerText = text.toLowerCase().trim();
-    if (lowerText.endsWith('stop listening') || 
+    if (lowerText.endsWith('stop listening') ||
         lowerText.endsWith('pause listening')) {
       // Extract text before command
-      final beforeCommand = text.substring(
-        0, 
-        text.toLowerCase().lastIndexOf('stop listening').clamp(0, text.length)
-      ).trim();
-      
+      final beforeCommand = text
+          .substring(
+              0,
+              text
+                  .toLowerCase()
+                  .lastIndexOf('stop listening')
+                  .clamp(0, text.length))
+          .trim();
+
       if (beforeCommand.isNotEmpty) {
         _emitText(beforeCommand);
       }
-      
+
       pauseListening();
       return;
     }
@@ -266,16 +272,16 @@ class SpeechService extends ChangeNotifier {
   /// Handle speech recognition errors.
   void _handleError(dynamic error) {
     debugPrint('SpeechService: Error: $error');
-    
+
     final errorStr = error.toString().toLowerCase();
-    
+
     // Ignore "no match" errors (user was silent)
     if (errorStr.contains('no match') || errorStr.contains('no_match')) {
       debugPrint('SpeechService: No speech detected, restarting...');
       _restartIfNeeded();
       return;
     }
-    
+
     // Handle network errors
     if (errorStr.contains('network')) {
       _errorMessage = 'Network error. Check internet connection.';
@@ -286,10 +292,10 @@ class SpeechService extends ChangeNotifier {
     } else {
       _errorMessage = 'Speech error: $error';
     }
-    
+
     _isListening = false;
     notifyListeners();
-    
+
     // Auto-restart after a delay
     if (_autoRestart && !_isPaused) {
       Future.delayed(const Duration(seconds: 2), () {
@@ -301,12 +307,12 @@ class SpeechService extends ChangeNotifier {
   /// Handle speech recognition status changes.
   void _handleStatus(String status) {
     debugPrint('SpeechService: Status: $status');
-    
+
     if (status == 'done' || status == 'notListening') {
       _isListening = false;
       _soundLevel = 0.0;
       notifyListeners();
-      
+
       // Auto-restart for continuous listening
       _restartIfNeeded();
     } else if (status == 'listening') {
