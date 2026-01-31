@@ -1,5 +1,5 @@
 Name:           speech2code
-Version:        0.2.0
+Version:        VERSION
 Release:        1%{?dist}
 Summary:        Voice-to-keyboard bridge for seamless dictation
 
