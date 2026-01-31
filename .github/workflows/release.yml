@@ -43,10 +43,14 @@ jobs:
           echo "tag=v${{ inputs.version }}" >> $GITHUB_OUTPUT
 
       - name: Check if tag already exists
+        id: check_tag
         run: |
           if git rev-parse "v${{ inputs.version }}" >/dev/null 2>&1; then
-            echo "Error: Tag v${{ inputs.version }} already exists"
-            exit 1
+            echo "Tag v${{ inputs.version }} already exists"
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag v${{ inputs.version }} does not exist"
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Configure git
@@ -69,12 +73,14 @@ jobs:
           grep '^version:' android/pubspec.yaml
 
       - name: Commit version changes
+        if: steps.check_tag.outputs.tag_exists == 'false'
         run: |
           git add desktop/Cargo.toml android/pubspec.yaml
           git commit -m "chore: bump version to ${{ inputs.version }}"
           git push origin main
 
       - name: Create and push tag
+        if: steps.check_tag.outputs.tag_exists == 'false'
         run: |
           git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
           git push origin "v${{ inputs.version }}"
