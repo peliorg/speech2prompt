@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -43,7 +45,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
 
   Future<void> _checkBluetoothAndLoadDevices() async {
     final bluetooth = context.read<BleService>();
-    
+
     // Check permissions
     final hasPermission = await PermissionService.hasBluetoothPermissions();
     if (!hasPermission) {
@@ -67,11 +69,11 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     });
 
     final bluetooth = context.read<BleService>();
-    
+
     try {
       // Start BLE scan and listen to results
       final scanStream = await bluetooth.startScan();
-      
+
       // Collect devices for a few seconds
       final subscription = scanStream.listen((devices) {
         if (mounted) {
@@ -86,12 +88,11 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
           });
         }
       });
-      
+
       // Scan for 10 seconds
       await Future.delayed(const Duration(seconds: 10));
       await subscription.cancel();
       await bluetooth.stopScan();
-      
     } catch (e) {
       debugPrint('Error scanning: $e');
     }
@@ -112,8 +113,9 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
 
   Future<void> _connectToDevice(BleDeviceInfo device) async {
     final bluetooth = context.read<BleService>();
-    
-    if (bluetooth.isConnected && bluetooth.connectedDevice?.deviceId == device.deviceId) {
+
+    if (bluetooth.isConnected &&
+        bluetooth.connectedDevice?.deviceId == device.deviceId) {
       Navigator.pop(context);
       return;
     }
@@ -124,13 +126,14 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
 
     // Check for stored pairing
     final deviceAddress = device.device.remoteId.toString();
-    final storedPairing = await SecureStorageService.getPairedDevice(deviceAddress);
-    
+    final storedPairing =
+        await SecureStorageService.getPairedDevice(deviceAddress);
+
     if (storedPairing != null) {
       // Use stored credentials
       final key = base64Decode(storedPairing.sharedSecret);
       bluetooth.setPairingPin('', storedPairing.linuxDeviceId);
-      
+
       final success = await bluetooth.connect(device);
       if (success && mounted) {
         Navigator.pop(context);
@@ -138,7 +141,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     } else {
       // New pairing needed
       final success = await bluetooth.connect(device);
-      
+
       if (success && mounted) {
         if (bluetooth.state == BtConnectionState.awaitingPairing) {
           final paired = await _showPairingDialog(bluetooth);
@@ -155,7 +158,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
   Future<bool> _showPairingDialog(BleService bluetooth) async {
     final pinController = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    
+
     final result = await showDialog<Map<String, String>>(
       context: context,
       barrierDismissible: false,
@@ -227,7 +230,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     }
 
     final pin = result['pin']!;
-    
+
     // Show waiting indicator
     if (mounted) {
       showDialog(
@@ -248,10 +251,10 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     // Complete pairing with PIN
     // The Linux device ID will come from PAIR_ACK in real implementation
     await bluetooth.completePairing(pin, 'linux-placeholder');
-    
+
     // Wait a bit for the pairing to complete
     await Future.delayed(const Duration(seconds: 2));
-    
+
     if (mounted) {
       Navigator.pop(context); // Close waiting dialog
     }
@@ -357,7 +360,8 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       itemCount: _devices.length,
       itemBuilder: (context, index) {
         final device = _devices[index];
-        final isConnected = bluetooth.connectedDevice?.deviceId == device.deviceId;
+        final isConnected =
+            bluetooth.connectedDevice?.deviceId == device.deviceId;
         final isConnecting = bluetooth.state.isConnecting && isConnected;
 
         return ListTile(
@@ -367,9 +371,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
           ),
           title: Text(device.displayName),
           subtitle: Text(
-            isConnected
-                ? bluetooth.state.displayText
-                : device.deviceId,
+            isConnected ? bluetooth.state.displayText : device.deviceId,
           ),
           trailing: isConnecting
               ? const SizedBox(
