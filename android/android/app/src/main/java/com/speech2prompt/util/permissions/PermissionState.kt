@@ -1,0 +1,212 @@
+package com.speech2prompt.util.permissions
+
+import android.Manifest
+import android.os.Build
+
+/**
+ * Represents the status of a single permission.
+ */
+enum class PermissionStatus {
+    /** Permission has been granted */
+    GRANTED,
+    
+    /** Permission has been denied but can be requested again */
+    DENIED,
+    
+    /** Permission has been denied permanently (user selected "Don't ask again") */
+    DENIED_PERMANENTLY
+}
+
+/**
+ * Groups of permissions required by the app.
+ */
+enum class PermissionGroup {
+    /** Bluetooth-related permissions (varies by API level) */
+    BLUETOOTH,
+    
+    /** Audio recording permission */
+    AUDIO,
+    
+    /** Location permissions (required for BLE on API < 31) */
+    LOCATION
+}
+
+/**
+ * Data class representing the state of all permissions in the app.
+ *
+ * @property bluetooth Status of Bluetooth permissions
+ * @property audio Status of audio recording permission
+ * @property location Status of location permission
+ */
+data class PermissionState(
+    val bluetooth: Map<String, PermissionStatus>,
+    val audio: Map<String, PermissionStatus>,
+    val location: Map<String, PermissionStatus>
+) {
+    /**
+     * Checks if all Bluetooth permissions are granted.
+     * The required permissions vary by API level:
+     * - API 31+: BLUETOOTH_SCAN, BLUETOOTH_CONNECT
+     * - API < 31: ACCESS_FINE_LOCATION (required for BLE scanning)
+     */
+    fun hasBluetoothPermissions(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // API 31+: Check modern Bluetooth permissions
+            bluetooth.values.all { it == PermissionStatus.GRANTED }
+        } else {
+            // API < 31: Location permission is required for BLE scanning
+            location.values.all { it == PermissionStatus.GRANTED }
+        }
+    }
+    
+    /**
+     * Checks if audio recording permission is granted.
+     */
+    fun hasAudioPermission(): Boolean {
+        return audio.values.all { it == PermissionStatus.GRANTED }
+    }
+    
+    /**
+     * Checks if location permissions are granted.
+     * Only required for BLE scanning on API < 31.
+     */
+    fun hasLocationPermission(): Boolean {
+        return location.values.all { it == PermissionStatus.GRANTED }
+    }
+    
+    /**
+     * Checks if all required permissions for the app are granted.
+     * This includes Bluetooth and Audio permissions.
+     * Location is only required on API < 31.
+     */
+    fun hasAllRequiredPermissions(): Boolean {
+        return hasBluetoothPermissions() && hasAudioPermission()
+    }
+    
+    /**
+     * Returns a list of all permissions that are denied (but can be requested again).
+     */
+    fun getDeniedPermissions(): List<String> {
+        val denied = mutableListOf<String>()
+        bluetooth.forEach { (permission, status) ->
+            if (status == PermissionStatus.DENIED) denied.add(permission)
+        }
+        audio.forEach { (permission, status) ->
+            if (status == PermissionStatus.DENIED) denied.add(permission)
+        }
+        location.forEach { (permission, status) ->
+            if (status == PermissionStatus.DENIED) denied.add(permission)
+        }
+        return denied
+    }
+    
+    /**
+     * Returns a list of all permissions that are permanently denied.
+     */
+    fun getPermanentlyDeniedPermissions(): List<String> {
+        val denied = mutableListOf<String>()
+        bluetooth.forEach { (permission, status) ->
+            if (status == PermissionStatus.DENIED_PERMANENTLY) denied.add(permission)
+        }
+        audio.forEach { (permission, status) ->
+            if (status == PermissionStatus.DENIED_PERMANENTLY) denied.add(permission)
+        }
+        location.forEach { (permission, status) ->
+            if (status == PermissionStatus.DENIED_PERMANENTLY) denied.add(permission)
+        }
+        return denied
+    }
+    
+    /**
+     * Returns a list of all missing permissions (denied or denied permanently).
+     */
+    fun getMissingPermissions(): List<String> {
+        return getDeniedPermissions() + getPermanentlyDeniedPermissions()
+    }
+    
+    /**
+     * Checks if any permissions are permanently denied.
+     */
+    fun hasPermanentlyDeniedPermissions(): Boolean {
+        return getPermanentlyDeniedPermissions().isNotEmpty()
+    }
+    
+    companion object {
+        /**
+         * Creates a PermissionState with all permissions granted.
+         */
+        fun allGranted(): PermissionState {
+            val bluetoothPerms = getRequiredBluetoothPermissions()
+            val audioPerms = getRequiredAudioPermissions()
+            val locationPerms = getRequiredLocationPermissions()
+            
+            return PermissionState(
+                bluetooth = bluetoothPerms.associateWith { PermissionStatus.GRANTED },
+                audio = audioPerms.associateWith { PermissionStatus.GRANTED },
+                location = locationPerms.associateWith { PermissionStatus.GRANTED }
+            )
+        }
+        
+        /**
+         * Creates a PermissionState with all permissions denied.
+         */
+        fun allDenied(): PermissionState {
+            val bluetoothPerms = getRequiredBluetoothPermissions()
+            val audioPerms = getRequiredAudioPermissions()
+            val locationPerms = getRequiredLocationPermissions()
+            
+            return PermissionState(
+                bluetooth = bluetoothPerms.associateWith { PermissionStatus.DENIED },
+                audio = audioPerms.associateWith { PermissionStatus.DENIED },
+                location = locationPerms.associateWith { PermissionStatus.DENIED }
+            )
+        }
+        
+        /**
+         * Returns the list of Bluetooth permissions required for the current API level.
+         */
+        fun getRequiredBluetoothPermissions(): List<String> {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // API 31+: Modern Bluetooth permissions
+                listOf(
+                    Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                )
+            } else {
+                // API < 31: Legacy Bluetooth permissions (declared but not runtime-required)
+                // Location permission is required instead for BLE scanning
+                emptyList()
+            }
+        }
+        
+        /**
+         * Returns the list of audio permissions required.
+         */
+        fun getRequiredAudioPermissions(): List<String> {
+            return listOf(Manifest.permission.RECORD_AUDIO)
+        }
+        
+        /**
+         * Returns the list of location permissions required for the current API level.
+         * Only required for BLE scanning on API < 31.
+         */
+        fun getRequiredLocationPermissions(): List<String> {
+            return if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                // API < 31: Location permission required for BLE scanning
+                listOf(Manifest.permission.ACCESS_FINE_LOCATION)
+            } else {
+                // API 31+: Location not required for BLE
+                emptyList()
+            }
+        }
+        
+        /**
+         * Returns all permissions required by the app for the current API level.
+         */
+        fun getAllRequiredPermissions(): List<String> {
+            return getRequiredBluetoothPermissions() +
+                   getRequiredAudioPermissions() +
+                   getRequiredLocationPermissions()
+        }
+    }
+}

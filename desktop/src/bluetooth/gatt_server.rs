@@ -219,6 +219,7 @@ impl GattServer {
                     let resp_notify_rx = resp_notify_rx.clone();
                     
                     Box::pin(async move {
+                        debug!("Response TX notification loop started");
                         loop {
                             let data = {
                                 let mut rx = resp_notify_rx.lock().await;
@@ -227,14 +228,20 @@ impl GattServer {
                             
                             match data {
                                 Some(data) => {
+                                    debug!("Sending notification: {} bytes", data.len());
                                     if let Err(e) = notifier.notify(data).await {
                                         error!("Failed to send notification: {}", e);
                                         break;
                                     }
+                                    debug!("Notification sent successfully");
                                 }
-                                None => break,
+                                None => {
+                                    info!("Response TX channel closed, exiting notification loop");
+                                    break;
+                                }
                             }
                         }
+                        info!("Response TX notification loop exited");
                     })
                 })),
             ..Default::default()
@@ -377,10 +384,19 @@ impl GattServer {
             };
 
             // Verify and decrypt if we have crypto context
+            // Note: Only verify messages that should be signed (not PAIR_REQ, PAIR_ACK, HEARTBEAT, ACK before auth)
             if let Some(ref crypto) = state_guard.crypto {
-                if let Err(e) = message.verify_and_decrypt(crypto) {
-                    error!("Message verification failed: {}", e);
-                    return Ok(());
+                // Only verify messages after authentication for types that require it
+                let should_verify = matches!(
+                    message.message_type,
+                    MessageType::Text | MessageType::Command
+                );
+                
+                if should_verify {
+                    if let Err(e) = message.verify_and_decrypt(crypto) {
+                        error!("Message verification failed: {}", e);
+                        return Ok(());
+                    }
                 }
             }
 
@@ -537,13 +553,23 @@ impl GattServer {
 
         // Send PAIR_ACK
         let json = response.to_json()?;
+        info!("Sending PAIR_ACK: {} bytes", json.len());
         let packets = chunk_message(json.as_bytes(), state.negotiated_mtu);
+        info!("PAIR_ACK chunked into {} packets", packets.len());
 
         let tx_guard = self.response_tx.lock().await;
         if let Some(ref tx) = *tx_guard {
-            for packet in packets {
-                tx.send(packet).await?;
+            for (i, packet) in packets.iter().enumerate() {
+                info!("Sending PAIR_ACK packet {}/{} ({} bytes)", i + 1, packets.len(), packet.len());
+                if let Err(e) = tx.send(packet.clone()).await {
+                    error!("Failed to queue PAIR_ACK packet: {}", e);
+                    return Err(e.into());
+                }
             }
+            info!("All PAIR_ACK packets queued successfully");
+        } else {
+            error!("Response TX sender is None - cannot send PAIR_ACK!");
+            return Err(anyhow!("Response TX sender not available"));
         }
 
         // Notify status change

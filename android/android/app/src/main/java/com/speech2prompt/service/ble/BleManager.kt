@@ -1,0 +1,543 @@
+package com.speech2prompt.service.ble
+
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothGatt
+import android.util.Log
+import com.speech2prompt.domain.model.*
+import com.speech2prompt.util.crypto.CryptoManager
+import com.speech2prompt.util.crypto.SecureStorageManager
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * High-level BLE manager integrating all BLE components.
+ * 
+ * Features:
+ * - Device scanning
+ * - Connection management
+ * - Message sending/receiving with encryption
+ * - Pairing flow
+ * - Heartbeat monitoring
+ * - Automatic reconnection
+ */
+@Singleton
+class BleManager @Inject constructor(
+    private val scanner: BleScanner,
+    private val connection: BleConnection,
+    private val characteristicHandler: BleCharacteristicHandler,
+    private val cryptoManager: CryptoManager,
+    private val secureStorage: SecureStorageManager
+) {
+    companion object {
+        private const val TAG = "BleManager"
+    }
+    
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    
+    // Packet reassembly
+    private val packetReassembler = PacketReassembler()
+    
+    // Crypto state
+    private var sharedSecret: ByteArray? = null
+    private var deviceId: String? = null
+    private var linuxDeviceId: String? = null
+    private var pendingPin: String? = null  // PIN entered before PAIR_ACK received
+    
+    // State flows
+    val connectionState: StateFlow<BtConnectionState> = connection.connectionState
+    val scannedDevices: StateFlow<List<BleDeviceInfo>> = scanner.scannedDevices
+    val isScanning: StateFlow<Boolean> = scanner.isScanning
+    
+    private val _connectedDevice = MutableStateFlow<BleDeviceInfo?>(null)
+    val connectedDevice: StateFlow<BleDeviceInfo?> = _connectedDevice.asStateFlow()
+    
+    private val _receivedMessages = MutableSharedFlow<Message>(extraBufferCapacity = 64)
+    val receivedMessages: SharedFlow<Message> = _receivedMessages.asSharedFlow()
+    
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+    
+    // Pending operations
+    private val pendingMessages = mutableListOf<Message>()
+    private val ackWaiters = mutableMapOf<Long, CompletableDeferred<Boolean>>()
+    
+    // Heartbeat
+    private var heartbeatJob: Job? = null
+    
+    init {
+        setupConnectionCallbacks()
+        setupDataFlows()
+    }
+    
+    /**
+     * Check if Bluetooth is enabled.
+     */
+    fun isBluetoothEnabled(): Boolean = scanner.isBluetoothEnabled()
+    
+    /**
+     * Start scanning for Speech2Prompt devices.
+     */
+    fun startScan(timeoutMs: Long = BleConstants.SCAN_TIMEOUT.inWholeMilliseconds): Boolean {
+        return scanner.startScan(timeoutMs)
+    }
+    
+    /**
+     * Stop scanning.
+     */
+    fun stopScan() {
+        scanner.stopScan()
+    }
+    
+    /**
+     * Connect to a device.
+     */
+    @SuppressLint("MissingPermission")
+    suspend fun connect(deviceInfo: BleDeviceInfo): Boolean {
+        Log.d(TAG, "Connecting to ${deviceInfo.displayName}...")
+        
+        stopScan()
+        _connectedDevice.value = deviceInfo
+        _error.value = null
+        
+        // Load existing pairing if available
+        loadPairing(deviceInfo.address)
+        
+        val success = connection.connect(deviceInfo.device)
+        if (!success) {
+            _error.value = "Failed to initiate connection"
+            _connectedDevice.value = null
+        }
+        
+        return success
+    }
+    
+    /**
+     * Disconnect from current device.
+     */
+    fun disconnect() {
+        Log.d(TAG, "Disconnecting...")
+        heartbeatJob?.cancel()
+        heartbeatJob = null
+        connection.disconnect()
+        _connectedDevice.value = null
+        sharedSecret = null
+        linuxDeviceId = null
+    }
+    
+    /**
+     * Send a message to the connected device.
+     */
+    suspend fun sendMessage(message: Message): Boolean {
+        if (connectionState.value != BtConnectionState.CONNECTED) {
+            Log.d(TAG, "Not connected, queueing message")
+            pendingMessages.add(message)
+            return false
+        }
+        
+        val gatt = connection.getGatt()
+        if (gatt == null) {
+            Log.e(TAG, "GATT not available")
+            return false
+        }
+        
+        return try {
+            // Encrypt if we have shared secret and message should be encrypted
+            val messageToSend = if (sharedSecret != null && message.shouldEncrypt) {
+                encryptMessage(message)
+            } else {
+                message
+            }
+            
+            // Sign with shared secret for checksum (required for desktop verification)
+            val json = messageToSend.signAndToJson(sharedSecret)
+            Log.d(TAG, "Sending: ${message.messageType} (${json.length} bytes)")
+            
+            val jsonBytes = json.toByteArray(Charsets.UTF_8)
+            val mtu = connection.mtu.value
+            
+            // Write using characteristic handler
+            val success = characteristicHandler.writeCommand(gatt, jsonBytes, mtu)
+            
+            if (success) {
+                // Wait for ACK if needed
+                if (message.messageType != MessageType.ACK && 
+                    message.messageType != MessageType.HEARTBEAT) {
+                    waitForAck(message.timestamp)
+                } else {
+                    true
+                }
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Send error: ${e.message}", e)
+            false
+        }
+    }
+    
+    /**
+     * Set pairing PIN and derive shared secret.
+     * 
+     * If linuxDeviceId is not yet available (PAIR_ACK not received), the PIN is stored
+     * and the shared secret will be derived when PAIR_ACK arrives.
+     */
+    suspend fun setPairingPin(pin: String) {
+        // Store the PIN in case we need it later (when PAIR_ACK arrives)
+        pendingPin = pin
+        
+        if (linuxDeviceId == null) {
+            Log.d(TAG, "PIN stored, waiting for PAIR_ACK with Linux device ID")
+            return
+        }
+        
+        // linuxDeviceId is available, derive the shared secret now
+        deriveSharedSecret(pin)
+    }
+    
+    /**
+     * Internal method to derive shared secret from PIN.
+     * Called either immediately from setPairingPin (if linuxDeviceId available)
+     * or from handlePairAck (when linuxDeviceId becomes available).
+     */
+    private suspend fun deriveSharedSecret(pin: String) {
+        val linuxId = linuxDeviceId
+        if (linuxId == null) {
+            Log.e(TAG, "Cannot derive shared secret: Linux device ID not available")
+            return
+        }
+        
+        val myDeviceId = getOrCreateDeviceId()
+        
+        // Derive shared secret from PIN
+        val result = cryptoManager.deriveKey(pin, myDeviceId, linuxId)
+        result.onSuccess { key ->
+            sharedSecret = key
+            pendingPin = null  // Clear pending PIN after successful derivation
+            Log.d(TAG, "Shared secret derived from PIN")
+            
+            // Store pairing
+            _connectedDevice.value?.let { device ->
+                storePairing(device.address, linuxId, key)
+            }
+        }.onFailure { e ->
+            Log.e(TAG, "Failed to derive key: ${e.message}")
+            _error.value = "Failed to derive encryption key"
+        }
+    }
+    
+    /**
+     * Get or create device ID.
+     */
+    suspend fun getOrCreateDeviceId(): String {
+        if (deviceId == null) {
+            val result = secureStorage.getDeviceId()
+            deviceId = result.getOrNull() ?: cryptoManager.generateDeviceId()
+        }
+        return deviceId!!
+    }
+    
+    /**
+     * Clear crypto context (for fresh pairing).
+     */
+    fun clearCryptoContext() {
+        sharedSecret?.let { cryptoManager.wipeBytes(it) }
+        sharedSecret = null
+        linuxDeviceId = null
+        pendingPin = null
+        Log.d(TAG, "Crypto context cleared")
+    }
+    
+    // --- Private methods ---
+    
+    private fun setupConnectionCallbacks() {
+        connection.onServicesDiscovered = { gatt ->
+            onServicesDiscovered(gatt)
+        }
+        
+        connection.onCharacteristicChanged = { characteristic, value ->
+            characteristicHandler.handleCharacteristicChange(characteristic, value)
+        }
+        
+        connection.onDisconnected = {
+            heartbeatJob?.cancel()
+            packetReassembler.reset()
+        }
+    }
+    
+    private fun setupDataFlows() {
+        // Handle received data packets
+        scope.launch {
+            characteristicHandler.receivedData.collect { packet ->
+                handleResponsePacket(packet)
+            }
+        }
+        
+        // Handle status updates
+        scope.launch {
+            characteristicHandler.statusUpdates.collect { status ->
+                handleStatusUpdate(status)
+            }
+        }
+    }
+    
+    @SuppressLint("MissingPermission")
+    private fun onServicesDiscovered(gatt: BluetoothGatt) {
+        Log.d(TAG, "Setting up characteristics...")
+        
+        // Enable notifications
+        characteristicHandler.enableResponseNotifications(gatt)
+        characteristicHandler.enableStatusNotifications(gatt)
+        
+        // Start heartbeat
+        startHeartbeat()
+        
+        // Send pairing request
+        scope.launch {
+            delay(500) // Give time for notifications to be set up
+            sendPairingRequest()
+        }
+    }
+    
+    private fun handleResponsePacket(packet: ByteArray) {
+        Log.d(TAG, "Processing response packet: ${packet.size} bytes")
+        val completeMessage = packetReassembler.addPacket(packet)
+        
+        if (completeMessage != null) {
+            try {
+                val json = String(completeMessage, Charsets.UTF_8)
+                Log.d(TAG, "Complete message JSON: ${json.take(200)}...")
+                val message = Message.fromJson(json)
+                handleReceivedMessage(message)
+            } catch (e: Exception) {
+                Log.e(TAG, "Parse error: ${e.message}", e)
+            }
+        } else {
+            Log.d(TAG, "Packet added to reassembler, waiting for more data")
+        }
+    }
+    
+    private fun handleReceivedMessage(message: Message) {
+        Log.d(TAG, "Received: ${message.messageType}")
+        
+        // Decrypt if encrypted
+        val decryptedMessage = if (sharedSecret != null && message.shouldEncrypt) {
+            decryptMessage(message) ?: return
+        } else {
+            message
+        }
+        
+        when (decryptedMessage.messageType) {
+            MessageType.ACK -> handleAck(decryptedMessage)
+            MessageType.PAIR_ACK -> handlePairAck(decryptedMessage)
+            MessageType.HEARTBEAT -> {
+                // Respond with ACK
+                scope.launch {
+                    sendMessage(Message.ack(decryptedMessage.timestamp))
+                }
+            }
+            else -> {
+                // Emit to subscribers
+                scope.launch {
+                    _receivedMessages.emit(decryptedMessage)
+                }
+            }
+        }
+    }
+    
+    private fun handleStatusUpdate(status: ByteArray) {
+        if (status.isEmpty()) return
+        
+        val statusCode = status[0].toInt() and 0xFF
+        Log.d(TAG, "Status changed: 0x${statusCode.toString(16)}")
+        
+        when (statusCode) {
+            BleStatusCode.AWAITING_PAIRING -> {
+                Log.d(TAG, "Device awaiting pairing - showing PIN dialog")
+                // Update connection state to trigger PIN dialog in UI
+                connection.setAwaitingPairing()
+            }
+            BleStatusCode.PAIRED -> {
+                // NOTE: We ignore PAIRED status notifications to prevent race conditions.
+                // The desktop may send PAIRED status before the user enters their PIN on Android.
+                // Pairing completion is ONLY handled via PAIR_ACK message in handlePairAck(),
+                // which ensures PIN was actually verified.
+                Log.d(TAG, "Received PAIRED status (ignored - waiting for PAIR_ACK message)")
+            }
+            BleStatusCode.ERROR -> {
+                _error.value = "Device reported error"
+            }
+        }
+    }
+    
+    private suspend fun sendPairingRequest() {
+        val myDeviceId = getOrCreateDeviceId()
+        val payload = PairRequestPayload.create(myDeviceId, "Android Device")
+        val message = Message.pairRequest(payload)
+        val success = sendMessage(message)
+        
+        // If we don't have an existing shared secret, we need to show PIN dialog
+        // The desktop shows its PIN dialog when it receives PAIR_REQ, so we need
+        // to show ours as well. The desktop may not send AWAITING_PAIRING status
+        // notification, so we trigger the state change ourselves after sending PAIR_REQ.
+        if (success && sharedSecret == null) {
+            Log.d(TAG, "No existing pairing - triggering PIN dialog")
+            connection.setAwaitingPairing()
+        }
+    }
+    
+    private fun handlePairAck(message: Message) {
+        Log.d(TAG, "Handling PAIR_ACK message")
+        val payload = message.parsePairAckPayload()
+        if (payload == null) {
+            Log.e(TAG, "Invalid PAIR_ACK payload: ${message.payload}")
+            return
+        }
+        
+        Log.d(TAG, "PAIR_ACK payload: deviceId=${payload.deviceId}, isSuccess=${payload.isSuccess}, error=${payload.error}")
+        
+        if (payload.isSuccess) {
+            linuxDeviceId = payload.deviceId
+            Log.d(TAG, "Pairing successful with ${payload.deviceId}")
+            
+            // If we have a pending PIN (user entered PIN before PAIR_ACK arrived),
+            // derive the shared secret now that we have the linux device ID
+            val pin = pendingPin
+            if (pin != null && sharedSecret == null) {
+                Log.d(TAG, "Deriving shared secret with pending PIN")
+                scope.launch {
+                    deriveSharedSecret(pin)
+                    // Transition to CONNECTED only after shared secret is derived
+                    connection.completePairing()
+                    // Send pending messages
+                    sendPendingMessages()
+                }
+            } else {
+                // Shared secret already available (or no PIN entered yet)
+                // Transition back to CONNECTED state now that pairing is complete
+                connection.completePairing()
+                // Send pending messages
+                sendPendingMessages()
+            }
+        } else {
+            Log.e(TAG, "Pairing failed: ${payload.error}")
+            _error.value = payload.error ?: "Pairing failed"
+            pendingPin = null  // Clear pending PIN on failure
+            // Transition to FAILED state on pairing failure
+            connection.failPairing()
+        }
+    }
+    
+    private fun handleAck(message: Message) {
+        val timestamp = message.payload.toLongOrNull() ?: return
+        ackWaiters[timestamp]?.complete(true)
+        ackWaiters.remove(timestamp)
+    }
+    
+    private suspend fun waitForAck(timestamp: Long): Boolean {
+        val deferred = CompletableDeferred<Boolean>()
+        ackWaiters[timestamp] = deferred
+        
+        return try {
+            withTimeout(BleConstants.ACK_TIMEOUT.inWholeMilliseconds) {
+                deferred.await()
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.w(TAG, "ACK timeout for $timestamp")
+            ackWaiters.remove(timestamp)
+            false
+        }
+    }
+    
+    private fun startHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = scope.launch {
+            while (isActive && connectionState.value == BtConnectionState.CONNECTED) {
+                delay(BleConstants.HEARTBEAT_INTERVAL.inWholeMilliseconds)
+                
+                if (connectionState.value == BtConnectionState.CONNECTED) {
+                    val success = sendMessage(Message.heartbeat())
+                    if (!success) {
+                        Log.w(TAG, "Heartbeat failed")
+                    }
+                }
+            }
+        }
+    }
+    
+    private fun sendPendingMessages() {
+        scope.launch {
+            while (pendingMessages.isNotEmpty() && 
+                   connectionState.value == BtConnectionState.CONNECTED) {
+                val message = pendingMessages.removeAt(0)
+                sendMessage(message)
+            }
+        }
+    }
+    
+    private fun encryptMessage(message: Message): Message {
+        val secret = sharedSecret ?: return message
+        
+        val result = cryptoManager.encrypt(message.payload, secret)
+        return result.fold(
+            onSuccess = { encrypted ->
+                message.copy(payload = encrypted)
+            },
+            onFailure = { e ->
+                Log.e(TAG, "Encryption failed: ${e.message}")
+                message
+            }
+        )
+    }
+    
+    private fun decryptMessage(message: Message): Message? {
+        val secret = sharedSecret ?: return message
+        
+        val result = cryptoManager.decrypt(message.payload, secret)
+        return result.fold(
+            onSuccess = { decrypted ->
+                message.copy(payload = decrypted)
+            },
+            onFailure = { e ->
+                Log.e(TAG, "Decryption failed: ${e.message}")
+                null
+            }
+        )
+    }
+    
+    private suspend fun loadPairing(address: String) {
+        val secretResult = secureStorage.getSharedSecret(address)
+        secretResult.onSuccess { secret ->
+            if (secret != null) {
+                try {
+                    sharedSecret = android.util.Base64.decode(secret, android.util.Base64.NO_WRAP)
+                    Log.d(TAG, "Loaded existing pairing for $address")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to decode shared secret", e)
+                }
+            }
+        }
+    }
+    
+    private suspend fun storePairing(address: String, linuxId: String, secret: ByteArray) {
+        val secretBase64 = android.util.Base64.encodeToString(secret, android.util.Base64.NO_WRAP)
+        val result = secureStorage.storeSharedSecret(address, secretBase64)
+        result.onSuccess {
+            Log.d(TAG, "Pairing stored for $address")
+        }.onFailure { e ->
+            Log.e(TAG, "Failed to store pairing: ${e.message}")
+        }
+    }
+    
+    /**
+     * Release all resources.
+     */
+    fun release() {
+        scope.cancel()
+        stopScan()
+        disconnect()
+        sharedSecret?.let { cryptoManager.wipeBytes(it) }
+        sharedSecret = null
+    }
+}

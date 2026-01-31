@@ -3,7 +3,7 @@ desktop/target/
 **/*.rs.bk
 Cargo.lock
 
-# Flutter
+# Flutter (legacy)
 android/.dart_tool/
 android/.packages
 android/.pub-cache/
@@ -14,6 +14,12 @@ android/.flutter-plugins-dependencies
 android/*.iml
 android/.idea/
 android/.metadata
+
+# Android native build artifacts
+android/android/app/build/
+android/android/build/
+android/android/.gradle/
+android/android/local.properties
 
 # IDE
 .vscode/
