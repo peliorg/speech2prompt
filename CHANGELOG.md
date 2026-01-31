@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2026-01-31
+
+### Fixed
+- **BLE Pairing**: Fixed GATT service registration bug where service was unregistered immediately after creation
+- **BLE Pairing**: Implemented complete PIN pairing flow with GTK dialog on desktop
+- **BLE Pairing**: Fixed checksum calculation mismatch between Android (Dart) and Desktop (Rust)
+- **BLE Pairing**: Fixed PAIR_ACK signing issue (chicken-and-egg problem with key derivation)
+- **BLE Pairing**: Fixed reconnection flow to always send PAIR_REQ
+- **BLE Pairing**: Fixed crypto key synchronization when desktop requests fresh pairing
+- **Speech Recognition**: Fixed crash loop from aggressive auto-restart on errors
+- **Speech Recognition**: Fixed `error_speech_timeout` being treated as real error instead of normal state
+- **Speech Recognition**: Fixed `error_busy` recovery being blocked by rate limiter
+- **Speech Recognition**: Implemented recognizer state machine to prevent race conditions
+
+### Added
+- Exponential backoff for speech recognition errors (2s, 4s, 8s... up to 30s)
+- Configurable listening parameters (`pauseFor`, `listenFor` durations)
+- Watchdog timer (20s) for long-running stability - enables 1+ hour sessions
+- State stuck detection (10s timeout for `starting`/`stopping` states)
+- Automatic trailing space after each message to prevent joined words
+
+### Changed
+- Reduced text buffer delay from 150ms to 50ms for faster response
+- Speech recognition now restarts immediately after successful recognition (no debounce)
+- Transient errors (`error_client`, `error_speech_timeout`, `error_no_match`) no longer show error UI
+- ACK timeout increased from 5s to 10s for more reliable pairing
+- PIN dialog now has 60-second auto-close timeout
+
+### Technical
+- Desktop: Store `ApplicationHandle` to keep GATT service registered
+- Desktop: Send unsigned PAIR_ACK (Android needs device ID to derive key)
+- Android: Use raw bytes for checksum calculation (matching Rust implementation)
+- Android: `RecognizerState` enum for state machine (`idle`, `starting`, `listening`, `stopping`)
+- Android: Watchdog checks every 5s for stuck states and missed restarts
+
 ## [0.2.0] - 2026-01-31
 
 ### Changed
@@ -59,5 +94,6 @@ For users upgrading from 0.1.x:
 - HMAC-SHA256 message signing
 - Secure key derivation with PBKDF2
 
+[0.2.5]: https://github.com/peliorg/speech2code/compare/v0.2.0...v0.2.5
 [0.2.0]: https://github.com/peliorg/speech2code/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/peliorg/speech2code/releases/tag/v0.1.4

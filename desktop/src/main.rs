@@ -25,7 +25,9 @@ mod storage;
 mod ui;
 
 use anyhow::Result;
+use gtk4::prelude::*;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -33,6 +35,12 @@ use bluetooth::GattServer;
 use events::EventProcessor;
 use state::AppState;
 use storage::History;
+
+/// Request to show PIN dialog for pairing.
+#[derive(Debug, Clone)]
+struct PairingRequest {
+    device_id: String,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -58,6 +66,15 @@ async fn main() -> Result<()> {
     let history = Arc::new(History::new(&config.data_dir)?);
     info!("History storage initialized");
 
+    // Initialize GTK (required for PIN dialog)
+    gtk4::init().expect("Failed to initialize GTK");
+    let gtk_app = gtk4::Application::builder()
+        .application_id("com.speech2code.desktop")
+        .build();
+    // Register the application so windows can be created
+    gtk_app.register(None::<&gtk4::gio::Cancellable>)?;
+    info!("GTK initialized");
+
     // Initialize input injector
     let injector = input::create_injector()?;
     info!("Input injector: {}", injector.backend_name());
@@ -68,13 +85,19 @@ async fn main() -> Result<()> {
     // Initialize BLE GATT server
     info!("Initializing BLE GATT server...");
     let (gatt_event_tx, gatt_event_rx) = tokio::sync::mpsc::channel::<bluetooth::ConnectionEvent>(32);
-    let mut gatt_server = GattServer::new(gatt_event_tx).await?;
-    gatt_server.set_name(&config.bluetooth.device_name).await?;
-    gatt_server.start().await?;
+    let gatt_server = Arc::new(Mutex::new(GattServer::new(gatt_event_tx).await?));
+    {
+        let mut server = gatt_server.lock().await;
+        server.set_name(&config.bluetooth.device_name).await?;
+        server.start().await?;
+    }
     info!(
         "BLE GATT server started and advertising as '{}'",
         config.bluetooth.device_name
     );
+
+    // Create channel for pairing requests
+    let (pairing_tx, mut pairing_rx) = tokio::sync::mpsc::channel::<PairingRequest>(8);
 
     // Create event processor
     let processor = EventProcessor::new(injector, (*history).clone());
@@ -107,7 +130,10 @@ async fn main() -> Result<()> {
                 }
                 bluetooth::ConnectionEvent::PairRequested { device_id } => {
                     info!("BLE pairing requested by: {}", device_id);
-                    // TODO: Trigger UI for PIN entry
+                    // Send to main loop for PIN dialog handling
+                    let _ = pairing_tx.send(PairingRequest { 
+                        device_id: device_id.clone() 
+                    }).await;
                 }
                 bluetooth::ConnectionEvent::CommandReceived(_) => {
                     // Will be processed below
@@ -126,8 +152,13 @@ async fn main() -> Result<()> {
     
     info!("Ready. System tray active.");
 
-    // Handle tray actions
+    // Handle tray actions and pairing requests
     loop {
+        // Process any pending GTK events (non-blocking)
+        while gtk4::glib::MainContext::default().pending() {
+            gtk4::glib::MainContext::default().iteration(false);
+        }
+        
         tokio::select! {
             Some(action) = action_rx.recv() => {
                 match action {
@@ -146,6 +177,51 @@ async fn main() -> Result<()> {
                     ui::TrayAction::Quit => {
                         info!("Quit requested");
                         break;
+                    }
+                }
+            }
+            Some(request) = pairing_rx.recv() => {
+                info!("Showing PIN dialog for device: {}", request.device_id);
+                
+                // Show PIN dialog
+                let mut pin_rx = ui::show_pin_dialog(&gtk_app, &request.device_id);
+                
+                // Process GTK events until dialog closes
+                // We need to run the GTK main loop to handle the dialog
+                let result = loop {
+                    // Process GTK events
+                    while gtk4::glib::MainContext::default().pending() {
+                        gtk4::glib::MainContext::default().iteration(false);
+                    }
+                    
+                    // Check if dialog result is ready
+                    match pin_rx.try_recv() {
+                        Ok(result) => break result,
+                        Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
+                            // Not ready yet, sleep briefly and continue
+                            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                        }
+                        Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                            // Channel closed without result, treat as cancelled
+                            break ui::PinDialogResult::Cancelled;
+                        }
+                    }
+                };
+                
+                // Handle result
+                let server = gatt_server.lock().await;
+                match result {
+                    ui::PinDialogResult::Pin(pin) => {
+                        info!("PIN entered, completing pairing");
+                        if let Err(e) = server.complete_pairing(&pin).await {
+                            error!("Pairing failed: {}", e);
+                        }
+                    }
+                    ui::PinDialogResult::Cancelled => {
+                        info!("Pairing cancelled by user");
+                        if let Err(e) = server.reject_pairing("User cancelled").await {
+                            error!("Failed to send rejection: {}", e);
+                        }
                     }
                 }
             }

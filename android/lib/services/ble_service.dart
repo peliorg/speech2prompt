@@ -59,6 +59,9 @@ class BleService extends ChangeNotifier {
   CryptoContext? _crypto;
   String? _deviceId;
 
+  // Pending PIN for pairing (stored temporarily until PAIR_ACK arrives)
+  String? _pendingPairingPin;
+
   // Configuration
   int _reconnectAttempts = 0;
   static const int _maxReconnectAttempts = 5;
@@ -233,10 +236,8 @@ class BleService extends ChangeNotifier {
 
       debugPrint('BleService: Connected to ${deviceInfo.displayName}');
 
-      // Send pairing request if not yet paired
-      if (_crypto == null) {
-        await _sendPairingRequest();
-      }
+      // Always send pairing request - desktop requires PAIR_REQ to authenticate
+      await _sendPairingRequest();
 
       return true;
     } catch (e) {
@@ -294,8 +295,9 @@ class BleService extends ChangeNotifier {
 
   /// Handle incoming notifications from Response TX characteristic.
   void _onNotificationReceived(List<int> data) {
-    final completeMessage =
-        _packetReassembler.addPacket(Uint8List.fromList(data));
+    final completeMessage = _packetReassembler.addPacket(
+      Uint8List.fromList(data),
+    );
 
     if (completeMessage != null) {
       try {
@@ -314,7 +316,8 @@ class BleService extends ChangeNotifier {
 
     final statusCode = data[0];
     debugPrint(
-        'BleService: Status changed to 0x${statusCode.toRadixString(16)}');
+      'BleService: Status changed to 0x${statusCode.toRadixString(16)}',
+    );
 
     // Map status codes
     switch (statusCode) {
@@ -340,7 +343,11 @@ class BleService extends ChangeNotifier {
     debugPrint('BleService: Received: ${message.messageType.value}');
 
     // Verify and decrypt if we have crypto
-    if (_crypto != null && message.messageType != MessageType.ack) {
+    // Note: ACK and PAIR_ACK are excluded - ACK has no payload to verify,
+    // and PAIR_ACK contains the Linux device ID needed to derive the key
+    if (_crypto != null &&
+        message.messageType != MessageType.ack &&
+        message.messageType != MessageType.pairAck) {
       try {
         _crypto!.verifyAndDecrypt(message);
       } catch (e) {
@@ -375,20 +382,73 @@ class BleService extends ChangeNotifier {
   }
 
   /// Handle pairing acknowledgment.
+  /// NOTE: PAIR_ACK is NOT signed because Android needs the Linux device ID
+  /// from the payload to derive the shared key (chicken-and-egg problem).
   void _handlePairAck(Message message) {
     try {
       final payload = PairAckPayload.fromJson(message.payload);
       if (payload.status == PairStatus.ok) {
-        debugPrint('BleService: Pairing successful');
+        final linuxDeviceId = payload.deviceId;
+        if (linuxDeviceId.isEmpty) {
+          debugPrint('BleService: PAIR_ACK missing Linux device ID');
+          _errorMessage = 'Invalid pairing response';
+          _setState(BtConnectionState.failed);
+          return;
+        }
+
+        // Clear any stale crypto context before deriving new key
+        _crypto = null;
+
+        // Complete pairing using the stored PIN and received Linux device ID
+        if (_pendingPairingPin != null) {
+          _completePairingWithLinuxId(_pendingPairingPin!, linuxDeviceId);
+          _pendingPairingPin = null;
+        } else {
+          debugPrint('BleService: No pending PIN for pairing');
+          _errorMessage = 'Pairing PIN not set';
+          _setState(BtConnectionState.failed);
+          return;
+        }
+
+        debugPrint('BleService: Pairing successful with $linuxDeviceId');
         _setState(BtConnectionState.connected);
         _sendPendingMessages();
       } else {
         debugPrint('BleService: Pairing failed: ${payload.error}');
         _errorMessage = payload.error ?? 'Pairing failed';
+        _pendingPairingPin = null;
         _setState(BtConnectionState.failed);
       }
     } catch (e) {
       debugPrint('BleService: Error parsing PAIR_ACK: $e');
+      _pendingPairingPin = null;
+    }
+  }
+
+  /// Internal method to complete pairing with the Linux device ID from PAIR_ACK.
+  Future<void> _completePairingWithLinuxId(
+    String pin,
+    String linuxDeviceId,
+  ) async {
+    _deviceId ??= generateDeviceId();
+
+    // Derive key from PIN
+    final key = deriveKey(pin, _deviceId!, linuxDeviceId);
+    _crypto = CryptoContext.fromKey(key);
+
+    // Store pairing info in secure storage
+    if (_connectedDeviceInfo != null) {
+      final pairedDevice = PairedDevice(
+        address: _connectedDeviceInfo!.device.remoteId.toString(),
+        name: _connectedDeviceInfo!.displayName,
+        linuxDeviceId: linuxDeviceId,
+        sharedSecret: base64Encode(key),
+        pairedAt: DateTime.now(),
+      );
+      await SecureStorageService.storePairedDevice(pairedDevice);
+      debugPrint(
+        'BleService: Pairing stored for ${_connectedDeviceInfo?.displayName}',
+      );
     }
   }
 
@@ -505,8 +565,9 @@ class BleService extends ChangeNotifier {
   void _scheduleReconnect() {
     _reconnectTimer?.cancel();
 
-    final delay =
-        Duration(seconds: 1 << _reconnectAttempts); // Exponential backoff
+    final delay = Duration(
+      seconds: 1 << _reconnectAttempts,
+    ); // Exponential backoff
     debugPrint('BleService: Reconnecting in ${delay.inSeconds}s...');
 
     _reconnectTimer = Timer(delay, () async {
@@ -562,7 +623,21 @@ class BleService extends ChangeNotifier {
     debugPrint('BleService: Crypto context set');
   }
 
+  /// Clear the crypto context (used when fresh pairing is needed).
+  void clearCryptoContext() {
+    _crypto = null;
+    debugPrint('BleService: Crypto context cleared');
+  }
+
+  /// Store the PIN temporarily for pairing completion.
+  /// The actual pairing will be completed when PAIR_ACK arrives with the Linux device ID.
+  void storePendingPairingPin(String pin) {
+    _pendingPairingPin = pin;
+    debugPrint('BleService: Pending pairing PIN stored');
+  }
+
   /// Complete pairing and store credentials.
+  /// This is now called internally by _handlePairAck when it receives the Linux device ID.
   Future<void> completePairing(String pin, String linuxDeviceId) async {
     _deviceId ??= generateDeviceId();
 
@@ -581,7 +656,8 @@ class BleService extends ChangeNotifier {
       );
       await SecureStorageService.storePairedDevice(pairedDevice);
       debugPrint(
-          'BleService: Pairing stored for ${_connectedDeviceInfo?.displayName}');
+        'BleService: Pairing stored for ${_connectedDeviceInfo?.displayName}',
+      );
     }
 
     _setState(BtConnectionState.connected);

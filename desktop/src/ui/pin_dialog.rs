@@ -15,9 +15,7 @@
 //! PIN entry dialog for pairing.
 
 use gtk4::prelude::*;
-use gtk4::{
-    Application, ApplicationWindow, Box as GtkBox, Button, Entry, Label, Orientation,
-};
+use gtk4::{Application, ApplicationWindow, Box as GtkBox, Button, Entry, Label, Orientation};
 use std::sync::Arc;
 use tokio::sync::oneshot;
 use tracing::info;
@@ -33,10 +31,7 @@ pub enum PinDialogResult {
 /// Show PIN entry dialog.
 ///
 /// Returns the entered PIN or None if cancelled.
-pub fn show_pin_dialog(
-    app: &Application,
-    device_id: &str,
-) -> oneshot::Receiver<PinDialogResult> {
+pub fn show_pin_dialog(app: &Application, device_id: &str) -> oneshot::Receiver<PinDialogResult> {
     let (tx, rx) = oneshot::channel();
     let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
 
@@ -143,6 +138,16 @@ pub fn show_pin_dialog(
             let _ = tx.send(PinDialogResult::Cancelled);
         }
         glib::Propagation::Proceed
+    });
+
+    // Auto-close after 60 seconds
+    let window_timeout = window.clone();
+    let tx_timeout = tx.clone();
+    glib::timeout_add_seconds_local_once(60, move || {
+        if let Some(tx) = tx_timeout.lock().unwrap().take() {
+            let _ = tx.send(PinDialogResult::Cancelled);
+        }
+        window_timeout.close();
     });
 
     window.present();

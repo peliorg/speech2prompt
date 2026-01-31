@@ -37,10 +37,9 @@ class TranscriptionDisplay extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: hasText
-            ? Theme.of(context)
-                .colorScheme
-                .primaryContainer
-                .withValues(alpha: 0.3)
+            ? Theme.of(
+                context,
+              ).colorScheme.primaryContainer.withValues(alpha: 0.3)
             : Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
@@ -63,10 +62,7 @@ class TranscriptionDisplay extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 isListening ? 'Listening...' : 'Last transcription',
-                style: const TextStyle(
-                  color: Colors.white54,
-                  fontSize: 12,
-                ),
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
               ),
             ],
           ),
@@ -76,7 +72,7 @@ class TranscriptionDisplay extends StatelessWidget {
             duration: const Duration(milliseconds: 150),
             child: Text(
               hasText ? text : placeholder,
-              key: ValueKey(text),
+              key: ValueKey('transcription_${text.hashCode}_$hasText'),
               style: TextStyle(
                 fontSize: hasText ? 18 : 16,
                 color: hasText ? Colors.white : Colors.white38,
@@ -108,8 +104,9 @@ class CompactTranscription extends StatelessWidget {
   Widget build(BuildContext context) {
     if (text.isEmpty) return const SizedBox.shrink();
 
-    final displayText =
-        text.length > maxLength ? '${text.substring(0, maxLength)}...' : text;
+    final displayText = text.length > maxLength
+        ? '${text.substring(0, maxLength)}...'
+        : text;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

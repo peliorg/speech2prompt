@@ -182,10 +182,19 @@ String calculateChecksum(
   int timestamp,
   Uint8List secret,
 ) {
-  final data =
-      '$version$msgType$payload$timestamp${String.fromCharCodes(secret)}';
-  final bytes = utf8.encode(data);
-  final digest = sha256.convert(bytes);
+  final versionBytes = utf8.encode('$version');
+  final msgTypeBytes = utf8.encode(msgType);
+  final payloadBytes = utf8.encode(payload);
+  final timestampBytes = utf8.encode('$timestamp');
+
+  final data = Uint8List.fromList([
+    ...versionBytes,
+    ...msgTypeBytes,
+    ...payloadBytes,
+    ...timestampBytes,
+    ...secret, // Raw bytes directly
+  ]);
+  final digest = sha256.convert(data);
 
   // Return first 8 hex characters (4 bytes)
   return digest.toString().substring(0, 8);

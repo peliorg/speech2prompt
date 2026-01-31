@@ -74,7 +74,7 @@ class BleConfig {
   static const Duration connectionTimeout = Duration(seconds: 15);
 
   /// ACK timeout.
-  static const Duration ackTimeout = Duration(seconds: 5);
+  static const Duration ackTimeout = Duration(seconds: 10);
 
   /// Calculate effective payload size for a given MTU.
   static int effectivePayloadSize(int mtu, {bool isFirst = false}) {

@@ -16,7 +16,7 @@
 
 use anyhow::{anyhow, Result};
 use bluer::gatt::local::{
-    characteristic_control, Application, Characteristic, CharacteristicNotify,
+    characteristic_control, Application, ApplicationHandle, Characteristic, CharacteristicNotify,
     CharacteristicNotifyMethod, CharacteristicRead, CharacteristicReadRequest,
     CharacteristicWrite, CharacteristicWriteMethod, CharacteristicWriteRequest, Service,
 };
@@ -91,6 +91,7 @@ pub struct GattServer {
     response_tx: Arc<Mutex<Option<mpsc::Sender<Vec<u8>>>>>,
     status_tx: Arc<Mutex<Option<mpsc::Sender<Vec<u8>>>>>,
     _adv_handle: Option<AdvertisementHandle>,
+    _app_handle: Option<ApplicationHandle>,
 }
 
 impl GattServer {
@@ -126,6 +127,7 @@ impl GattServer {
             response_tx: Arc::new(Mutex::new(None)),
             status_tx: Arc::new(Mutex::new(None)),
             _adv_handle: None,
+            _app_handle: None,
         })
     }
 
@@ -336,12 +338,9 @@ impl GattServer {
         };
 
         // Register with BlueZ
-        let _app_handle = self.adapter.serve_gatt_application(app).await?;
+        self._app_handle = Some(self.adapter.serve_gatt_application(app).await?);
 
         info!("GATT service registered");
-
-        // Keep the handle alive (we don't drop it)
-        // In a real implementation, we'd store _app_handle
 
         Ok(())
     }
@@ -407,6 +406,10 @@ impl GattServer {
                             device_id: payload.device_id,
                         })
                         .await;
+
+                    // Send ACK immediately to prevent Android timeout
+                    let ack = Message::ack(message.timestamp);
+                    Self::send_response_internal(ack, &state_guard, response_tx.clone()).await;
                 }
                 MessageType::Text => {
                     if state_guard.state != ConnectionState::Authenticated {
@@ -520,10 +523,10 @@ impl GattServer {
 
         // Create PAIR_ACK response
         let payload = PairAckPayload::success(&self.linux_device_id);
-        let mut response = Message::new(MessageType::PairAck, payload.to_json()?);
+        let response = Message::new(MessageType::PairAck, payload.to_json()?);
 
-        // Sign with the new crypto context
-        response.sign(&crypto);
+        // NOTE: Do NOT sign PAIR_ACK - Android needs the Linux device ID from this
+        // message to derive the shared key, so signing creates a chicken-and-egg problem.
 
         // Update state
         state.crypto = Some(Arc::new(crypto));
@@ -557,6 +560,33 @@ impl GattServer {
             })
             .await;
 
+        Ok(())
+    }
+
+    /// Reject pairing request.
+    pub async fn reject_pairing(&self, reason: &str) -> Result<()> {
+        let state = self.state.read().await;
+        
+        let device_id = state.device_id.as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("unknown");
+        
+        // Create PAIR_ACK with error status
+        let payload = PairAckPayload::error(&self.linux_device_id, reason);
+        let response = Message::new(MessageType::PairAck, payload.to_json()?);
+        
+        // Send PAIR_ACK (no signing since pairing failed)
+        let json = response.to_json()?;
+        let packets = chunk_message(json.as_bytes(), state.negotiated_mtu);
+        
+        let tx_guard = self.response_tx.lock().await;
+        if let Some(ref tx) = *tx_guard {
+            for packet in packets {
+                tx.send(packet).await?;
+            }
+        }
+        
+        info!("Pairing rejected for device {}: {}", device_id, reason);
         Ok(())
     }
 

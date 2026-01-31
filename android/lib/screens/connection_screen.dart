@@ -94,9 +94,11 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       debugPrint('Error scanning: $e');
     }
 
-    setState(() {
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _enableBluetooth() async {
@@ -123,17 +125,29 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
 
     // Check for stored pairing
     final deviceAddress = device.device.remoteId.toString();
-    final storedPairing =
-        await SecureStorageService.getPairedDevice(deviceAddress);
+    final storedPairing = await SecureStorageService.getPairedDevice(
+      deviceAddress,
+    );
 
     if (storedPairing != null) {
-      // Use stored credentials - key is derived from the stored shared secret
-      // but we only need the device ID for reconnection
-      bluetooth.setPairingPin('', storedPairing.linuxDeviceId);
-
+      // Connect first - PAIR_REQ will be sent during connection
+      // Then set crypto context after connection succeeds
       final success = await bluetooth.connect(device);
       if (success && mounted) {
-        Navigator.pop(context);
+        // Check if desktop is requesting fresh pairing
+        if (bluetooth.state == BtConnectionState.awaitingPairing) {
+          // Desktop doesn't recognize us or wants fresh pairing
+          // Clear stale crypto and show pairing dialog for fresh pairing
+          bluetooth.clearCryptoContext();
+          final paired = await _showPairingDialog(bluetooth);
+          if (paired && mounted) {
+            Navigator.pop(context);
+          }
+        } else {
+          // Desktop accepted reconnection without fresh pairing
+          bluetooth.setPairingPin('', storedPairing.linuxDeviceId);
+          Navigator.pop(context);
+        }
       }
     } else {
       // New pairing needed
@@ -210,9 +224,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
           ElevatedButton(
             onPressed: () {
               if (formKey.currentState!.validate()) {
-                Navigator.pop(context, {
-                  'pin': pinController.text,
-                });
+                Navigator.pop(context, {'pin': pinController.text});
               }
             },
             child: const Text('Pair'),
@@ -245,12 +257,13 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       );
     }
 
-    // Complete pairing with PIN
-    // The Linux device ID will come from PAIR_ACK in real implementation
-    await bluetooth.completePairing(pin, 'linux-placeholder');
+    // Store the PIN - actual pairing will complete when PAIR_ACK arrives
+    // with the Linux device ID (which is needed to derive the shared key)
+    bluetooth.storePendingPairingPin(pin);
 
-    // Wait a bit for the pairing to complete
-    await Future.delayed(const Duration(seconds: 2));
+    // Wait for PAIR_ACK to arrive and complete the pairing
+    // The _handlePairAck method in BleService will handle the actual pairing
+    await Future.delayed(const Duration(seconds: 5));
 
     if (mounted) {
       Navigator.pop(context); // Close waiting dialog
@@ -301,10 +314,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
           children: [
             const Icon(Icons.bluetooth_disabled, size: 64),
             const SizedBox(height: 16),
-            const Text(
-              'Bluetooth is disabled',
-              style: TextStyle(fontSize: 18),
-            ),
+            const Text('Bluetooth is disabled', style: TextStyle(fontSize: 18)),
             const SizedBox(height: 8),
             const Text(
               'Enable Bluetooth to connect to your computer.',
@@ -377,8 +387,8 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : isConnected
-                  ? const Icon(Icons.check_circle, color: Colors.green)
-                  : null,
+              ? const Icon(Icons.check_circle, color: Colors.green)
+              : null,
           onTap: isConnecting ? null : () => _connectToDevice(device),
         );
       },

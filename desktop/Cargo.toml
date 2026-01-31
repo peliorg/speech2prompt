@@ -1,11 +1,11 @@
 [package]
 name = "speech2code-desktop"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 authors = ["Speech2Code Team"]
 description = "Linux desktop companion for Speech2Code voice-to-keyboard bridge"
 license = "Apache-2.0"
-repository = "https://github.com/yourusername/speech2code"
+repository = "https://github.com/peliorg/speech2code"
 
 [dependencies]
 # Async runtime

@@ -13,11 +13,15 @@
 // limitations under the License.
 
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../models/voice_command.dart';
+
+/// State machine for the speech recognizer to prevent race conditions.
+enum RecognizerState { idle, starting, listening, stopping }
 
 /// Callback for when final text is recognized.
 typedef OnTextRecognized = void Function(String text);
@@ -31,6 +35,25 @@ typedef OnPartialResult = void Function(String partial);
 /// Service for managing continuous speech recognition.
 class SpeechService extends ChangeNotifier {
   final SpeechToText _speech = SpeechToText();
+
+  // Recognizer state machine to prevent race conditions
+  RecognizerState _recognizerState = RecognizerState.idle;
+
+  // Restart debouncing and backoff
+  DateTime? _lastRestartAttempt;
+  static const _minRestartInterval = Duration(seconds: 2);
+  int _consecutiveErrors = 0;
+  static const _maxBackoffSeconds = 30;
+  static const _maxConsecutiveErrors = 10;
+  bool _restartScheduled = false;
+  int _busyRetryCount = 0;
+
+  // Watchdog timer for long-running stability
+  Timer? _watchdogTimer;
+  static const _watchdogTimeout = Duration(seconds: 20);
+  static const _stateStuckTimeout = Duration(seconds: 10);
+  DateTime? _lastSuccessfulListening;
+  DateTime? _stateChangeTime;
 
   // State
   bool _isInitialized = false;
@@ -49,9 +72,23 @@ class SpeechService extends ChangeNotifier {
   OnPartialResult? onPartialResult;
 
   // Configuration
+  /// Duration to wait for speech before timing out
   Duration _pauseFor = const Duration(seconds: 3);
+
+  /// Maximum duration for a single listening session
   Duration _listenFor = const Duration(seconds: 30);
+
   bool _autoRestart = true;
+
+  /// Setter to allow configuration of pause duration
+  void setPauseFor(Duration duration) {
+    _pauseFor = duration;
+  }
+
+  /// Setter to allow configuration of listen duration
+  void setListenFor(Duration duration) {
+    _listenFor = duration;
+  }
 
   // Getters
   bool get isInitialized => _isInitialized;
@@ -119,8 +156,18 @@ class SpeechService extends ChangeNotifier {
       if (!success) return;
     }
 
+    // State machine: only allow starting if idle
+    if (_recognizerState != RecognizerState.idle) {
+      debugPrint(
+        'SpeechService: Cannot start - recognizer state is $_recognizerState',
+      );
+      return;
+    }
+
     if (_isListening) return;
 
+    _recognizerState = RecognizerState.starting;
+    _stateChangeTime = DateTime.now();
     _errorMessage = null;
     _isPaused = false;
     _currentText = '';
@@ -139,10 +186,15 @@ class SpeechService extends ChangeNotifier {
         ),
       );
 
+      _recognizerState = RecognizerState.listening;
+      _stateChangeTime = DateTime.now();
       _isListening = true;
+      _resetWatchdog();
       notifyListeners();
       debugPrint('SpeechService: Started listening');
     } catch (e) {
+      _recognizerState = RecognizerState.idle;
+      _stateChangeTime = DateTime.now();
       _errorMessage = 'Failed to start: $e';
       debugPrint('SpeechService: Error starting: $e');
       notifyListeners();
@@ -153,7 +205,16 @@ class SpeechService extends ChangeNotifier {
   Future<void> stopListening() async {
     if (!_isListening) return;
 
+    _watchdogTimer?.cancel();
+    _recognizerState = RecognizerState.stopping;
+    _stateChangeTime = DateTime.now();
     await _speech.stop();
+
+    // Wait for Android to fully release the recognizer
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    _recognizerState = RecognizerState.idle;
+    _stateChangeTime = DateTime.now();
     _isListening = false;
     _soundLevel = 0.0;
     notifyListeners();
@@ -164,6 +225,7 @@ class SpeechService extends ChangeNotifier {
   Future<void> pauseListening() async {
     _isPaused = true;
     _autoRestart = false;
+    _watchdogTimer?.cancel();
     await stopListening();
     debugPrint('SpeechService: Paused');
   }
@@ -191,11 +253,15 @@ class SpeechService extends ChangeNotifier {
 
     if (text.isEmpty) return;
 
+    // Reset consecutive errors on successful recognition
+    _consecutiveErrors = 0;
+
     _currentText = text;
     notifyListeners();
 
     if (result.finalResult) {
       debugPrint('SpeechService: Final result: $text');
+      _lastSuccessfulListening = DateTime.now();
       _processFinalResult(text);
     } else {
       debugPrint('SpeechService: Partial result: $text');
@@ -212,11 +278,12 @@ class SpeechService extends ChangeNotifier {
       // Extract text before command
       final beforeCommand = text
           .substring(
-              0,
-              text
-                  .toLowerCase()
-                  .lastIndexOf('stop listening')
-                  .clamp(0, text.length))
+            0,
+            text
+                .toLowerCase()
+                .lastIndexOf('stop listening')
+                .clamp(0, text.length),
+          )
           .trim();
 
       if (beforeCommand.isNotEmpty) {
@@ -275,31 +342,94 @@ class SpeechService extends ChangeNotifier {
 
     final errorStr = error.toString().toLowerCase();
 
-    // Ignore "no match" errors (user was silent)
-    if (errorStr.contains('no match') || errorStr.contains('no_match')) {
-      debugPrint('SpeechService: No speech detected, restarting...');
-      _restartIfNeeded();
+    // Transient errors that should trigger immediate restart without backoff:
+    // - no_match: user was silent during recognition window
+    // - speech_timeout: user didn't speak (not a real error)
+    // - error_client: often occurs when restarting recognizer quickly
+    if (errorStr.contains('no match') ||
+        errorStr.contains('no_match') ||
+        errorStr.contains('speech_timeout') ||
+        errorStr.contains('error_client')) {
+      debugPrint('SpeechService: Transient error, restarting...');
+      _recognizerState = RecognizerState.idle;
+      _stateChangeTime = DateTime.now();
+      _scheduleRestart();
       return;
     }
 
-    // Handle network errors
-    if (errorStr.contains('network')) {
+    // Handle error_busy specially - silent recovery, no UI changes
+    if (errorStr.contains('error_busy') || errorStr.contains('busy')) {
+      debugPrint(
+        'SpeechService: Recognizer busy, waiting silently for release',
+      );
+      _recognizerState = RecognizerState.stopping;
+      _stateChangeTime = DateTime.now();
+      _speech.stop();
+
+      // Wait longer for busy errors (1 second) then set to idle and retry
+      // Do NOT change _isListening or _errorMessage - keep UI stable
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        _recognizerState = RecognizerState.idle;
+        _stateChangeTime = DateTime.now();
+        if (_autoRestart && !_isPaused) {
+          debugPrint('SpeechService: Retrying after busy error');
+          // Clear rate limiter state before retry
+          _lastRestartAttempt = null;
+          _restartScheduled = false;
+          _scheduleRestart();
+        }
+      });
+      return;
+    }
+
+    // Real errors that should trigger exponential backoff:
+    // - error_network: network connectivity issues
+    // - error_server: server-side issues
+    // - error_audio: microphone/audio issues
+    // - error_permission: permission denied
+    if (errorStr.contains('network') || errorStr.contains('error_network')) {
       _errorMessage = 'Network error. Check internet connection.';
-    } else if (errorStr.contains('audio')) {
+    } else if (errorStr.contains('audio') || errorStr.contains('error_audio')) {
       _errorMessage = 'Microphone error. Check permissions.';
-    } else if (errorStr.contains('busy')) {
-      _errorMessage = 'Speech service busy. Try again.';
+    } else if (errorStr.contains('server') ||
+        errorStr.contains('error_server')) {
+      _errorMessage = 'Server error. Try again later.';
+    } else if (errorStr.contains('permission') ||
+        errorStr.contains('error_permission')) {
+      _errorMessage = 'Permission denied. Check app settings.';
     } else {
       _errorMessage = 'Speech error: $error';
     }
 
+    _recognizerState = RecognizerState.idle;
+    _stateChangeTime = DateTime.now();
     _isListening = false;
     notifyListeners();
 
-    // Auto-restart after a delay
+    // Auto-restart with exponential backoff for real errors only
     if (_autoRestart && !_isPaused) {
-      Future.delayed(const Duration(seconds: 2), () {
-        _restartIfNeeded();
+      _consecutiveErrors++;
+
+      // Check if max errors reached
+      if (_consecutiveErrors >= _maxConsecutiveErrors) {
+        debugPrint(
+          'SpeechService: Max consecutive errors reached ($_maxConsecutiveErrors), stopping auto-restart',
+        );
+        _errorMessage = 'Too many errors. Tap to restart.';
+        notifyListeners();
+        return;
+      }
+
+      final delaySeconds = min(
+        pow(2, _consecutiveErrors).toInt(),
+        _maxBackoffSeconds,
+      );
+      debugPrint(
+        'SpeechService: Real error occurred, waiting ${delaySeconds}s before retry (attempt $_consecutiveErrors)',
+      );
+
+      Future.delayed(Duration(seconds: delaySeconds), () {
+        _scheduleRestart();
       });
     }
   }
@@ -309,27 +439,166 @@ class SpeechService extends ChangeNotifier {
     debugPrint('SpeechService: Status: $status');
 
     if (status == 'done' || status == 'notListening') {
+      _recognizerState = RecognizerState.idle;
+      _stateChangeTime = DateTime.now();
       _isListening = false;
       _soundLevel = 0.0;
       notifyListeners();
 
-      // Auto-restart for continuous listening
-      _restartIfNeeded();
+      // Auto-restart for continuous listening (successful completion, skip debounce)
+      _scheduleRestart(wasSuccessful: true);
     } else if (status == 'listening') {
+      _recognizerState = RecognizerState.listening;
+      _stateChangeTime = DateTime.now();
       _isListening = true;
       notifyListeners();
     }
   }
 
-  /// Restart listening if auto-restart is enabled.
-  void _restartIfNeeded() {
-    if (_autoRestart && !_isPaused && !_isListening) {
-      debugPrint('SpeechService: Auto-restarting...');
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (!_isListening && _autoRestart && !_isPaused) {
-          startListening();
-        }
+  /// Schedule a restart with debouncing to prevent rapid restart loops.
+  /// When [wasSuccessful] is true (e.g., after normal completion), skip debounce
+  /// to enable continuous listening without delays.
+  void _scheduleRestart({bool wasSuccessful = false}) {
+    if (!_autoRestart || _isPaused || _isListening) {
+      return;
+    }
+
+    // State machine: only schedule restart if recognizer is idle
+    if (_recognizerState != RecognizerState.idle) {
+      debugPrint(
+        'SpeechService: Cannot restart - recognizer state is $_recognizerState, scheduling delayed check',
+      );
+      // Schedule a delayed check to try again
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _scheduleRestart(wasSuccessful: wasSuccessful);
       });
+      return;
+    }
+
+    // Check if restart already scheduled
+    if (_restartScheduled) {
+      debugPrint('SpeechService: Restart already scheduled, skipping');
+      return;
+    }
+
+    // Only apply debounce for error restarts, not successful completions
+    if (!wasSuccessful) {
+      // Check if enough time has passed since last restart attempt (debouncing)
+      final now = DateTime.now();
+      if (_lastRestartAttempt != null &&
+          now.difference(_lastRestartAttempt!) < _minRestartInterval) {
+        debugPrint('SpeechService: Skipping restart - too soon');
+        return;
+      }
+    }
+
+    // Check if max errors reached
+    if (_consecutiveErrors >= _maxConsecutiveErrors) {
+      debugPrint(
+        'SpeechService: Max consecutive errors reached ($_maxConsecutiveErrors), stopping auto-restart',
+      );
+      return;
+    }
+
+    _restartScheduled = true;
+    _lastRestartAttempt = DateTime.now();
+
+    debugPrint('SpeechService: Auto-restarting...');
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _restartScheduled = false;
+      if (!_isListening &&
+          _autoRestart &&
+          !_isPaused &&
+          _recognizerState == RecognizerState.idle) {
+        startListening();
+      }
+    });
+  }
+
+  /// Start or reset the watchdog timer
+  void _resetWatchdog() {
+    _watchdogTimer?.cancel();
+    _lastSuccessfulListening = DateTime.now();
+    _stateChangeTime = DateTime.now();
+    _watchdogTimer = Timer.periodic(const Duration(seconds: 5), _checkWatchdog);
+  }
+
+  /// Check if we're stuck and need recovery
+  void _checkWatchdog(Timer timer) {
+    if (!_autoRestart || _isPaused) return;
+
+    final now = DateTime.now();
+
+    // Check if state is stuck in 'starting' or 'stopping' for too long
+    if (_recognizerState == RecognizerState.starting ||
+        _recognizerState == RecognizerState.stopping) {
+      if (_stateChangeTime != null &&
+          now.difference(_stateChangeTime!) > _stateStuckTimeout) {
+        debugPrint(
+          'SpeechService: Watchdog - state stuck in $_recognizerState, forcing restart',
+        );
+        _forceFullRestart();
+        return;
+      }
+    }
+
+    // Check if no successful listening for too long
+    if (_lastSuccessfulListening != null &&
+        now.difference(_lastSuccessfulListening!) > _watchdogTimeout) {
+      debugPrint(
+        'SpeechService: Watchdog - no successful listening for ${_watchdogTimeout.inSeconds}s, forcing restart',
+      );
+      _forceFullRestart();
+      return;
+    }
+
+    // Check if we should be listening but aren't
+    if (_recognizerState == RecognizerState.idle &&
+        !_isListening &&
+        _autoRestart &&
+        !_isPaused &&
+        !_restartScheduled) {
+      debugPrint(
+        'SpeechService: Watchdog - should be listening but idle, triggering restart',
+      );
+      _scheduleRestart(wasSuccessful: false);
+    }
+  }
+
+  /// Force a full restart of the speech service
+  Future<void> _forceFullRestart() async {
+    debugPrint('SpeechService: Forcing full restart');
+
+    // Cancel any pending operations
+    _watchdogTimer?.cancel();
+
+    // Force stop
+    _recognizerState = RecognizerState.stopping;
+    _stateChangeTime = DateTime.now();
+
+    try {
+      await _speech.stop();
+    } catch (e) {
+      debugPrint('SpeechService: Error stopping during force restart: $e');
+    }
+
+    // Wait for Android to release resources
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // Reset all state
+    _recognizerState = RecognizerState.idle;
+    _stateChangeTime = DateTime.now();
+    _consecutiveErrors = 0;
+    _lastRestartAttempt = null;
+    _restartScheduled = false;
+    _busyRetryCount = 0;
+
+    // Restart watchdog
+    _resetWatchdog();
+
+    // Start listening again
+    if (_autoRestart && !_isPaused) {
+      await startListening();
     }
   }
 
@@ -339,12 +608,20 @@ class SpeechService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reset error tracking and allow auto-restart again.
+  void resetErrorState() {
+    _consecutiveErrors = 0;
+    _lastRestartAttempt = null;
+    _restartScheduled = false;
+    _errorMessage = null;
+    _recognizerState = RecognizerState.idle;
+    _stateChangeTime = DateTime.now();
+    _lastSuccessfulListening = null;
+    notifyListeners();
+  }
+
   /// Configure listening parameters.
-  void configure({
-    Duration? pauseFor,
-    Duration? listenFor,
-    bool? autoRestart,
-  }) {
+  void configure({Duration? pauseFor, Duration? listenFor, bool? autoRestart}) {
     if (pauseFor != null) _pauseFor = pauseFor;
     if (listenFor != null) _listenFor = listenFor;
     if (autoRestart != null) _autoRestart = autoRestart;
@@ -352,8 +629,13 @@ class SpeechService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _watchdogTimer?.cancel();
     _autoRestart = false;
+    _recognizerState = RecognizerState.stopping;
+    _stateChangeTime = DateTime.now();
     _speech.stop();
+    _recognizerState = RecognizerState.idle;
+    _stateChangeTime = DateTime.now();
     super.dispose();
   }
 }
