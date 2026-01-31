@@ -138,6 +138,35 @@ systemctl --user start ydotoold
 - Go to Settings > Apps > Speech2Code > Permissions
 - Enable Microphone and Nearby devices (Bluetooth)
 
+## Releases
+
+### Installing Pre-built Packages
+
+Download the latest release from the [Releases page](https://github.com/peliorg/speech2code/releases).
+
+**Linux:**
+- `.deb` - For Ubuntu/Debian: `sudo dpkg -i speech2code-*.deb`
+- `.rpm` - For Fedora/RHEL: `sudo rpm -i speech2code-*.rpm`
+- `.AppImage` - Universal: `chmod +x Speech2Code-*.AppImage && ./Speech2Code-*.AppImage`
+
+**Android:**
+- `.apk` - Enable "Install from Unknown Sources", then install
+
+### Creating a Release
+
+For maintainers: Releases are automated via GitHub Actions.
+
+1. Ensure all tests pass and changes are committed
+2. Go to Actions → Release Build → Run workflow
+3. Enter the version number (e.g., `1.2.3`)
+4. The workflow will:
+   - Update version numbers
+   - Create a git tag
+   - Build all packages (deb, rpm, AppImage, APK)
+   - Create a GitHub Release with all artifacts
+
+See [.github/workflows/README.md](.github/workflows/README.md) for detailed setup instructions.
+
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
