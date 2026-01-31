@@ -31,7 +31,7 @@ dependencies:
   pointycastle: ^3.7.4
   
   # Permissions
-  permission_handler: ^11.1.0
+  permission_handler: ^12.0.1
   
   # UI utilities
   cupertino_icons: ^1.0.6
