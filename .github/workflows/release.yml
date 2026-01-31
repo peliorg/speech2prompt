@@ -253,6 +253,7 @@ jobs:
     name: Build Android APK
     needs: prepare
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -336,6 +337,7 @@ jobs:
   release:
     name: Create GitHub Release
     needs: [prepare, linux, android, source]
+    if: always() && needs.prepare.result == 'success' && needs.linux.result == 'success' && needs.source.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
