@@ -54,7 +54,7 @@ rm -rf %{buildroot}
 install -d %{buildroot}%{_bindir}
 install -d %{buildroot}%{_datadir}/applications
 install -d %{buildroot}%{_datadir}/icons/hicolor/256x256/apps
-install -d %{buildroot}%{_userunitdir}
+install -d %{buildroot}%{_prefix}/lib/systemd/user
 
 # Install binary
 install -m 755 speech2code-desktop %{buildroot}%{_bindir}/speech2code-desktop
@@ -63,12 +63,12 @@ install -m 755 speech2code-desktop %{buildroot}%{_bindir}/speech2code-desktop
 install -m 644 speech2code.desktop %{buildroot}%{_datadir}/applications/
 
 # Install systemd service
-install -m 644 speech2code.service %{buildroot}%{_userunitdir}/
+install -m 644 speech2code.service %{buildroot}%{_prefix}/lib/systemd/user/
 
 %files
 %{_bindir}/speech2code-desktop
 %{_datadir}/applications/speech2code.desktop
-%{_userunitdir}/speech2code.service
+%{_prefix}/lib/systemd/user/speech2code.service
 
 %post
 # Update desktop database

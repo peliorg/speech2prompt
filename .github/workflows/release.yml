@@ -170,12 +170,16 @@ jobs:
           # Setup RPM build environment
           mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
           
+          # Create staging directory with flat structure
+          STAGING_DIR="speech2code-${VERSION}"
+          mkdir -p "${STAGING_DIR}"
+          cp desktop/target/release/speech2code-desktop "${STAGING_DIR}/"
+          cp desktop/resources/speech2code.desktop "${STAGING_DIR}/"
+          cp desktop/resources/speech2code.service "${STAGING_DIR}/"
+          
           # Create source tarball
-          tar czf ~/rpmbuild/SOURCES/speech2code-${VERSION}.tar.gz \
-            --transform "s,^,speech2code-${VERSION}/," \
-            desktop/target/release/speech2code-desktop \
-            desktop/resources/speech2code.desktop \
-            desktop/resources/speech2code.service
+          tar czf ~/rpmbuild/SOURCES/speech2code-${VERSION}.tar.gz "${STAGING_DIR}"
+          rm -rf "${STAGING_DIR}"
           
           # Copy and process spec file
           cp desktop/packaging/rpm/speech2code.spec ~/rpmbuild/SPECS/
