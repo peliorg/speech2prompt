@@ -74,6 +74,11 @@ impl CryptoContext {
         let calculated = self.checksum(version, msg_type, payload, timestamp);
         calculated == expected
     }
+
+    /// Get the raw key bytes.
+    pub fn key(&self) -> &[u8; KEY_SIZE] {
+        &self.key
+    }
 }
 
 /// Derive a 256-bit key from PIN and device identifiers.
