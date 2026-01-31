@@ -19,6 +19,9 @@
 -keep class org.bouncycastle.** { *; }
 -dontwarn org.bouncycastle.**
 
+# Play Core (deferred components - not used)
+-dontwarn com.google.android.play.core.**
+
 # General Android
 -keepattributes *Annotation*
 -keepattributes SourceFile,LineNumberTable
