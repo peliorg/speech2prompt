@@ -98,6 +98,7 @@ jobs:
             libdbus-1-dev \
             libsqlite3-dev \
             libbluetooth-dev \
+            libxdo-dev \
             pkg-config \
             build-essential \
             imagemagick \
