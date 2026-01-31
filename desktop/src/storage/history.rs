@@ -135,7 +135,7 @@ impl History {
         let mut stmt = conn.prepare(
             "SELECT id, timestamp, entry_type, content, active_window 
              FROM history 
-             ORDER BY timestamp DESC 
+             ORDER BY timestamp DESC, id DESC 
              LIMIT ?1",
         )?;
 
@@ -165,7 +165,7 @@ impl History {
             "SELECT id, timestamp, entry_type, content, active_window 
              FROM history 
              WHERE content LIKE ?1
-             ORDER BY timestamp DESC 
+             ORDER BY timestamp DESC, id DESC 
              LIMIT ?2",
         )?;
 
