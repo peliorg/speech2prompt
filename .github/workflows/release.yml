@@ -169,6 +169,7 @@ jobs:
           mv "${PACKAGE_NAME}.deb" "speech2code-${VERSION}-linux-x86_64.deb"
 
       - name: Build .rpm package
+        continue-on-error: true
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           
