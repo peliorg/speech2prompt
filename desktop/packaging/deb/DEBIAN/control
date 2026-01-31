@@ -1,5 +1,5 @@
 Package: speech2code
-Version: VERSION
+Version: 0.2.0
 Section: utils
 Priority: optional
 Architecture: amd64

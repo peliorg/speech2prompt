@@ -1,5 +1,5 @@
 Name:           speech2code
-Version:        VERSION
+Version:        0.2.0
 Release:        1%{?dist}
 Summary:        Voice-to-keyboard bridge for seamless dictation
 
@@ -7,13 +7,17 @@ License:        Apache-2.0
 URL:            https://github.com/peliorg/speech2code
 Source0:        %{name}-%{version}.tar.gz
 
-BuildRequires:  gtk4-devel
-BuildRequires:  libadwaita-devel
-BuildRequires:  bluez-libs-devel
-BuildRequires:  dbus-devel
-BuildRequires:  sqlite-devel
-BuildRequires:  pkgconfig
-BuildRequires:  systemd-rpm-macros
+# BuildRequires are not needed since we're packaging a pre-built binary
+# created on Ubuntu in GitHub Actions. The --nodeps flag is used during
+# rpmbuild to skip dependency checking. If building from source on
+# Fedora/RHEL, uncomment these:
+# BuildRequires:  gtk4-devel
+# BuildRequires:  libadwaita-devel
+# BuildRequires:  bluez-libs-devel
+# BuildRequires:  dbus-devel
+# BuildRequires:  sqlite-devel
+# BuildRequires:  pkgconfig
+# BuildRequires:  systemd-rpm-macros
 
 Requires:       gtk4
 Requires:       libadwaita
@@ -117,5 +121,7 @@ if [ $1 -eq 0 ] && [ -x /usr/bin/gtk-update-icon-cache ]; then
 fi
 
 %changelog
-* Sat Feb 01 2026 Daniel Pelikan <daniel@example.com> - VERSION-1
-- Initial RPM release
+* Fri Jan 31 2026 Daniel Pelikan <daniel@example.com> - 0.2.0-1
+- BREAKING: Migrated from Bluetooth Classic (RFCOMM) to BLE
+- Improved connection speed and power efficiency
+- Better Android 12+ compatibility

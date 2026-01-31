@@ -17,7 +17,7 @@ import 'package:provider/provider.dart';
 
 import '../models/message.dart';
 import '../models/connection_state.dart';
-import '../services/bluetooth_service.dart';
+import '../services/ble_service.dart';
 
 /// Test screen for Bluetooth functionality.
 class BluetoothTestScreen extends StatefulWidget {
@@ -35,7 +35,7 @@ class _BluetoothTestScreenState extends State<BluetoothTestScreen> {
   void initState() {
     super.initState();
     
-    final bluetooth = context.read<BluetoothService>();
+    final bluetooth = context.read<BleService>();
     bluetooth.onMessageReceived = (message) {
       _addLog('RX: ${message.messageType.value} - ${message.payload}');
     };
@@ -57,7 +57,7 @@ class _BluetoothTestScreenState extends State<BluetoothTestScreen> {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
 
-    final bluetooth = context.read<BluetoothService>();
+    final bluetooth = context.read<BleService>();
     final message = Message.text(text);
     
     _addLog('TX: TEXT - $text');
@@ -68,7 +68,7 @@ class _BluetoothTestScreenState extends State<BluetoothTestScreen> {
   }
 
   Future<void> _sendCommand(String command) async {
-    final bluetooth = context.read<BluetoothService>();
+    final bluetooth = context.read<BleService>();
     final message = Message.command(command);
     
     _addLog('TX: COMMAND - $command');
@@ -90,7 +90,7 @@ class _BluetoothTestScreenState extends State<BluetoothTestScreen> {
           ),
         ],
       ),
-      body: Consumer<BluetoothService>(
+      body: Consumer<BleService>(
         builder: (context, bluetooth, child) {
           return Column(
             children: [
@@ -204,7 +204,7 @@ class _BluetoothTestScreenState extends State<BluetoothTestScreen> {
     );
   }
 
-  Widget _commandButton(String command, BluetoothService bluetooth) {
+  Widget _commandButton(String command, BleService bluetooth) {
     return ElevatedButton(
       onPressed: bluetooth.isConnected ? () => _sendCommand(command) : null,
       child: Text(command),

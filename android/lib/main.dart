@@ -22,7 +22,7 @@ import 'screens/connection_screen.dart';
 import 'screens/bluetooth_test_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/speech_service.dart';
-import 'services/bluetooth_service.dart';
+import 'services/ble_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,7 +54,7 @@ class Speech2CodeApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => SpeechService()),
-        ChangeNotifierProvider(create: (_) => BluetoothService()..initialize()),
+        ChangeNotifierProvider(create: (_) => BleService()..initialize()),
       ],
       child: MaterialApp(
         title: 'Speech2Code',

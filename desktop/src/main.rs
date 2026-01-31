@@ -29,7 +29,7 @@ use std::sync::Arc;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use bluetooth::BluetoothManager;
+use bluetooth::GattServer;
 use events::EventProcessor;
 use state::AppState;
 use storage::History;
@@ -65,50 +65,58 @@ async fn main() -> Result<()> {
     // Create application state
     let state = AppState::new();
 
-    // Initialize Bluetooth
-    let mut bt_manager = BluetoothManager::new().await?;
-    bt_manager.start(&config.bluetooth.device_name).await?;
+    // Initialize BLE GATT server
+    info!("Initializing BLE GATT server...");
+    let (gatt_event_tx, gatt_event_rx) = tokio::sync::mpsc::channel::<bluetooth::ConnectionEvent>(32);
+    let mut gatt_server = GattServer::new(gatt_event_tx).await?;
+    gatt_server.set_name(&config.bluetooth.device_name).await?;
+    gatt_server.start().await?;
     info!(
-        "Bluetooth server started as '{}'",
+        "BLE GATT server started and advertising as '{}'",
         config.bluetooth.device_name
     );
-
-    // Get event receiver
-    let event_rx = bt_manager
-        .take_event_receiver()
-        .expect("Event receiver already taken");
 
     // Create event processor
     let processor = EventProcessor::new(injector, (*history).clone());
 
-    // Update state from events
-    let state_events = state.clone();
-    let mut event_rx_state = event_rx;
+    // Handle BLE GATT events
+    let state_gatt = state.clone();
+    let mut gatt_event_rx_state = gatt_event_rx;
     
-    // Run event processor
     tokio::spawn(async move {
-        let mut processor = processor;
-        while let Some(event) = event_rx_state.recv().await {
+        let mut processor_gatt = processor;
+        
+        while let Some(event) = gatt_event_rx_state.recv().await {
             // Update state
             match &event {
                 bluetooth::ConnectionEvent::Connected { device_name } => {
-                    state_events.set_connected(device_name.clone());
+                    info!("BLE device connected: {}", device_name);
+                    state_gatt.set_connected(device_name.clone());
                 }
                 bluetooth::ConnectionEvent::Disconnected => {
-                    state_events.set_disconnected();
+                    info!("BLE device disconnected");
+                    state_gatt.set_disconnected();
                 }
-                bluetooth::ConnectionEvent::Error(_) => {
-                    state_events.set_error();
+                bluetooth::ConnectionEvent::Error(e) => {
+                    error!("BLE error: {}", e);
+                    state_gatt.set_error();
                 }
                 bluetooth::ConnectionEvent::TextReceived(text) => {
-                    state_events.set_last_text(text.clone());
+                    info!("BLE text received: {}", text);
+                    state_gatt.set_last_text(text.clone());
                 }
-                _ => {}
+                bluetooth::ConnectionEvent::PairRequested { device_id } => {
+                    info!("BLE pairing requested by: {}", device_id);
+                    // TODO: Trigger UI for PIN entry
+                }
+                bluetooth::ConnectionEvent::CommandReceived(_) => {
+                    // Will be processed below
+                }
             }
             
             // Process event
-            if let Err(e) = processor.process_event(event).await {
-                error!("Error processing event: {}", e);
+            if let Err(e) = processor_gatt.process_event(event).await {
+                error!("Error processing BLE event: {}", e);
             }
         }
     });

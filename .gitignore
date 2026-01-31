@@ -31,3 +31,6 @@ Thumbs.db
 
 # Logs
 *.log
+.idea/
+android/android/app/.project
+android/android/app/.settings/

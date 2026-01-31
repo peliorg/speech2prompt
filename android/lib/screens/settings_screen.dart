@@ -17,7 +17,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/speech_service.dart';
-import '../services/bluetooth_service.dart';
+import '../services/ble_service.dart';
 
 /// Settings screen for app configuration.
 class SettingsScreen extends StatefulWidget {
@@ -173,7 +173,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             title: const Text('Paired device'),
-            subtitle: Consumer<BluetoothService>(
+            subtitle: Consumer<BleService>(
               builder: (context, bt, _) {
                 return Text(
                   bt.connectedDevice?.displayName ?? 'Not connected',

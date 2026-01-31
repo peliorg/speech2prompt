@@ -1,6 +1,6 @@
 [package]
 name = "speech2code-desktop"
-version = "0.1.5"
+version = "0.2.0"
 edition = "2021"
 authors = ["Speech2Code Team"]
 description = "Linux desktop companion for Speech2Code voice-to-keyboard bridge"
@@ -11,8 +11,8 @@ repository = "https://github.com/yourusername/speech2code"
 # Async runtime
 tokio = { version = "1.35", features = ["full"] }
 
-# Bluetooth
-bluer = { version = "0.17", features = ["bluetoothd", "rfcomm"] }
+# Bluetooth - BLE GATT only (Phase 5: RFCOMM removed)
+bluer = { version = "0.17", features = ["bluetoothd"] }
 uuid = { version = "1.6", features = ["v4"] }
 
 # GUI
@@ -75,6 +75,9 @@ wayland = []
 strip = true
 lto = true
 codegen-units = 1
+
+[dev-dependencies]
+tempfile = "3.8"
 
 [[bin]]
 name = "test_input"

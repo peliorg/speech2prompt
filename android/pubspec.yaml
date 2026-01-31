@@ -1,7 +1,7 @@
 name: speech2code
 description: Voice-to-keyboard bridge for seamless dictation to Linux desktop.
 publish_to: 'none'
-version: 0.1.5+10
+version: 0.2.0+10
 license: Apache-2.0
 homepage: https://github.com/yourusername/speech2code
 
@@ -15,8 +15,8 @@ dependencies:
   # Speech recognition
   speech_to_text: ^7.0.0
   
-  # Bluetooth
-  flutter_bluetooth_serial: ^0.4.0
+  # Bluetooth - migrated to BLE
+  flutter_blue_plus: ^1.31.0
   
   # State management
   provider: ^6.1.1

@@ -14,15 +14,23 @@
 
 //! Bluetooth communication module.
 //!
-//! Handles RFCOMM server for receiving messages from Android app.
+//! Handles BLE GATT server for receiving messages from Android app.
 
-mod connection;
+// BLE modules
+mod ble_constants;
+mod gatt_server;
+mod reassembler;
+
+// Protocol (shared)
 mod protocol;
-mod server;
 
-pub use connection::{ConnectionEvent, ConnectionHandler, ConnectionState};
+// Export BLE components
+pub use ble_constants::*;
+pub use gatt_server::{GattServer, ConnectionEvent};
+pub use reassembler::{chunk_message, MessageReassembler};
+
+// Export protocol
 pub use protocol::{
     CommandCode, Message, MessageType, PairAckPayload, PairRequestPayload, PairStatus,
     PROTOCOL_VERSION,
 };
-pub use server::{BluetoothManager, BluetoothServer, PairedDevice};

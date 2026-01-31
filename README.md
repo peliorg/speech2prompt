@@ -8,17 +8,17 @@ A voice-to-keyboard bridge that lets you dictate text directly into any applicat
 
 - **Seamless Dictation**: Speak on your phone, text appears at cursor on your PC
 - **Voice Commands**: Control your desktop with commands like "new line", "select all", "copy"
-- **Secure Connection**: AES-256 encrypted Bluetooth communication
+- **Secure Connection**: AES-256 encrypted Bluetooth Low Energy (BLE) communication
 - **Works Everywhere**: Types into any application - IDEs, browsers, terminals
-- **Low Latency**: Direct Bluetooth connection, no internet required
+- **Low Latency**: Direct BLE connection, no internet required
 - **History Log**: Searchable history of all dictated text
 
 ## Components
 
 | Component | Technology | Description |
 |-----------|------------|-------------|
-| Android App | Flutter | Speech recognition, Bluetooth client |
-| Linux Desktop | Rust + GTK4 | Bluetooth server, keyboard simulation, system tray |
+| Android App | Flutter | Speech recognition, BLE GATT client |
+| Linux Desktop | Rust + GTK4 | BLE GATT server, keyboard simulation, system tray |
 
 ## Quick Start
 
@@ -84,13 +84,13 @@ cargo build --release
 
 ### Android
 - Android 5.0 (API 21) or higher
-- Bluetooth support
+- Bluetooth Low Energy (BLE) support
 - Microphone
 
 ### Linux
 - X11 or Wayland (with ydotool)
-- Bluetooth adapter
-- BlueZ 5.x
+- Bluetooth adapter with BLE support
+- BlueZ 5.x with BLE GATT support
 
 ## Configuration
 
@@ -119,6 +119,9 @@ sudo systemctl status bluetooth
 
 # Restart Bluetooth
 sudo systemctl restart bluetooth
+
+# Ensure your adapter supports BLE
+hciconfig -a | grep -i "le"
 
 # Check if device is paired
 bluetoothctl paired-devices

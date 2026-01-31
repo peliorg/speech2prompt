@@ -17,7 +17,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../services/speech_service.dart';
-import '../services/bluetooth_service.dart';
+import '../services/ble_service.dart';
 import '../services/command_processor.dart';
 import '../widgets/audio_visualizer.dart';
 import '../widgets/connection_badge.dart';
@@ -62,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _setupServices() {
-    final bluetoothService = context.read<BluetoothService>();
+    final bluetoothService = context.read<BleService>();
     final speechService = context.read<SpeechService>();
 
     // Create command processor
@@ -84,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _toggleListening() {
     final speechService = context.read<SpeechService>();
-    final bluetoothService = context.read<BluetoothService>();
+    final bluetoothService = context.read<BleService>();
 
     if (!bluetoothService.isConnected) {
       _showConnectionRequired();
@@ -111,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Consumer2<SpeechService, BluetoothService>(
+        child: Consumer2<SpeechService, BleService>(
           builder: (context, speech, bluetooth, child) {
             // Keep screen on when listening
             if (_keepScreenOn && speech.isListening) {
@@ -225,7 +225,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  String _getStatusText(SpeechService speech, BluetoothService bluetooth) {
+  String _getStatusText(SpeechService speech, BleService bluetooth) {
     if (!bluetooth.isConnected) {
       return 'Connect to start';
     }

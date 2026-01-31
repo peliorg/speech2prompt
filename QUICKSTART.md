@@ -78,12 +78,12 @@ cargo run --release
 ### What to Expect
 
 - A system tray icon should appear (look for it in your system tray)
-- The app will start a Bluetooth server and wait for connections
+- The app will start a BLE GATT server and advertise its presence
 - Check the terminal output for any errors
 
 ### Enable Bluetooth
 
-Make sure Bluetooth is enabled and visible:
+Make sure Bluetooth is enabled and your adapter supports BLE:
 
 ```bash
 # Check Bluetooth status
@@ -91,6 +91,9 @@ sudo systemctl status bluetooth
 
 # If not running, start it
 sudo systemctl start bluetooth
+
+# Check if your adapter supports BLE
+hciconfig -a | grep -i "le"
 
 # Make your computer discoverable (optional, only if pairing fails)
 bluetoothctl
@@ -359,8 +362,10 @@ Try dictating into:
 # Watch Bluetooth logs
 journalctl -f | grep -i bluetooth
 
-# Check RFCOMM connections
-sudo rfcomm
+# Check BLE connections with bluetoothctl
+bluetoothctl
+# In bluetoothctl:
+# info <device_mac>
 ```
 
 ## Next Steps

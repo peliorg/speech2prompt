@@ -18,7 +18,7 @@ env:
 jobs:
   prepare:
     name: Prepare Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.set_version.outputs.version }}
       tag: ${{ steps.set_version.outputs.tag }}
@@ -106,19 +106,14 @@ jobs:
             fakeroot \
             dpkg-dev
 
-      - name: Setup Rust
+      - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Rust dependencies
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            desktop/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('desktop/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+          workspaces: "desktop -> target"
+          cache-on-failure: true
 
       - name: Build release binary
         working-directory: desktop
@@ -169,7 +164,6 @@ jobs:
           mv "${PACKAGE_NAME}.deb" "speech2code-${VERSION}-linux-x86_64.deb"
 
       - name: Build .rpm package
-        continue-on-error: true
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
           
@@ -187,8 +181,8 @@ jobs:
           cp desktop/packaging/rpm/speech2code.spec ~/rpmbuild/SPECS/
           sed -i "s/VERSION/${VERSION}/" ~/rpmbuild/SPECS/speech2code.spec
           
-          # Build RPM
-          rpmbuild -bb ~/rpmbuild/SPECS/speech2code.spec
+          # Build RPM (--nodeps skips dependency checking since we're using pre-built binary)
+          rpmbuild -bb --nodeps ~/rpmbuild/SPECS/speech2code.spec
           
           # Copy RPM to workspace
           cp ~/rpmbuild/RPMS/x86_64/speech2code-${VERSION}-1.x86_64.rpm \
@@ -252,8 +246,7 @@ jobs:
   android:
     name: Build Android APK
     needs: prepare
-    runs-on: ubuntu-latest
-    continue-on-error: true
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -273,6 +266,16 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/android/**/*.gradle*', 'android/android/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Setup Android keystore
         working-directory: android
         run: |
@@ -291,7 +294,7 @@ jobs:
 
       - name: Run Flutter tests
         working-directory: android
-        run: flutter test || true
+        run: flutter test
 
       - name: Build release APK
         working-directory: android
@@ -313,7 +316,7 @@ jobs:
   source:
     name: Create Source Archive
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -337,8 +340,7 @@ jobs:
   release:
     name: Create GitHub Release
     needs: [prepare, linux, android, source]
-    if: always() && needs.prepare.result == 'success' && needs.linux.result == 'success' && needs.source.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:

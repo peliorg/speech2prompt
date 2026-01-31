@@ -1,7 +1,7 @@
 //! Integration tests for the full communication flow.
 
 use speech2code_desktop::crypto::CryptoContext;
-use speech2code_desktop::bluetooth::protocol::{Message, MessageType};
+use speech2code_desktop::bluetooth::{Message, MessageType};
 
 #[test]
 fn test_cross_platform_encryption() {
