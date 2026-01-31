@@ -232,8 +232,11 @@ jobs:
           ln -sf usr/share/applications/speech2code.desktop AppDir/
           ln -sf usr/share/icons/hicolor/256x256/apps/speech2code.png AppDir/
           
-          # Build AppImage
-          ARCH=x86_64 VERSION=${VERSION} ./appimagetool-x86_64.AppImage AppDir \
+          # Extract appimagetool (works without FUSE)
+          ./appimagetool-x86_64.AppImage --appimage-extract
+          
+          # Build AppImage using extracted tool
+          ARCH=x86_64 VERSION=${VERSION} ./squashfs-root/AppRun AppDir \
             Speech2Code-${VERSION}-x86_64.AppImage
 
       - name: Upload Linux artifacts
