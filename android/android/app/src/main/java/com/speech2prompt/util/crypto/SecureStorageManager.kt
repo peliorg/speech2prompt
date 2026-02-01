@@ -1,5 +1,6 @@
 package com.speech2prompt.util.crypto
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.provider.Settings
@@ -89,6 +90,7 @@ class SecureStorageManager @Inject constructor(
      * 
      * @return Device identifier string
      */
+    @SuppressLint("HardwareIds")
     suspend fun getDeviceId(): Result<String> = withContext(Dispatchers.IO) {
         try {
             mutex.withLock {

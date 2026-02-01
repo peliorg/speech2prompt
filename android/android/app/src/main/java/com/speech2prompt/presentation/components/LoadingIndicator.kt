@@ -18,8 +18,8 @@ import com.speech2prompt.presentation.theme.*
  */
 @Composable
 fun LoadingIndicator(
-    message: String? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    message: String? = null
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),

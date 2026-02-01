@@ -1,6 +1,7 @@
 package com.speech2prompt.util.permissions
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.os.Build
 
 /**
@@ -78,6 +79,7 @@ object PermissionRationale {
      * @param permissions List of denied permissions
      * @return Message explaining what functionality will be unavailable
      */
+    @SuppressLint("InlinedApi")
     fun getDeniedMessage(permissions: List<String>): String {
         val hasBluetooth = permissions.any {
             it == Manifest.permission.BLUETOOTH_SCAN ||
@@ -107,6 +109,7 @@ object PermissionRationale {
      * @param permissions List of permanently denied permissions
      * @return Message explaining how to enable permissions in settings
      */
+    @SuppressLint("InlinedApi")
     fun getPermanentlyDeniedMessage(permissions: List<String>): String {
         val hasBluetooth = permissions.any {
             it == Manifest.permission.BLUETOOTH_SCAN ||
