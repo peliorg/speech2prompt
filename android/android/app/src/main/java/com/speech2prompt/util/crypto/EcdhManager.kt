@@ -51,6 +51,8 @@ class EcdhManager @Inject constructor() {
      */
     fun generateKeyPair(): Result<KeyPair> {
         return try {
+            Log.d(TAG, "Generating X25519 keypair (API ${Build.VERSION.SDK_INT})")
+            
             val keyPairGenerator = if (Build.VERSION.SDK_INT >= 33) {
                 try {
                     KeyPairGenerator.getInstance(KEY_ALGORITHM_X25519)
@@ -63,9 +65,12 @@ class EcdhManager @Inject constructor() {
                 KeyPairGenerator.getInstance(KEY_ALGORITHM_X25519, BouncyCastleProvider.PROVIDER_NAME)
             }
             
-            keyPairGenerator.initialize(256) // X25519 is always 256-bit
-            Result.success(keyPairGenerator.generateKeyPair())
+            // X25519 has fixed key size, no initialization needed
+            val keyPair = keyPairGenerator.generateKeyPair()
+            Log.d(TAG, "Successfully generated X25519 keypair")
+            Result.success(keyPair)
         } catch (e: Exception) {
+            Log.e(TAG, "Failed to generate ECDH keypair", e)
             Result.failure(CryptoException("Failed to generate ECDH keypair: ${e.message}", e))
         }
     }
