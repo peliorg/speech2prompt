@@ -14,11 +14,10 @@
 
 //! UI module for system tray and windows.
 
+mod confirmation_dialog;
 mod history_window;
-mod pin_dialog;
 mod tray;
 
+pub use confirmation_dialog::{show_confirmation_dialog, ConfirmationResult};
 pub use history_window::show_history_window;
-pub use pin_dialog::{show_pin_dialog, PinDialogResult};
 pub use tray::{run_tray, TrayAction, TrayHandle};
-

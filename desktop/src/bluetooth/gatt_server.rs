@@ -30,6 +30,7 @@ use super::ble_constants::*;
 use super::protocol::{Message, MessageType, PairAckPayload, PairRequestPayload};
 use super::reassembler::{chunk_message, MessageReassembler};
 use crate::crypto::CryptoContext;
+use crate::crypto::ecdh::EcdhKeypair;
 
 /// Events emitted by the GATT server.
 #[derive(Debug, Clone)]
@@ -43,7 +44,10 @@ pub enum ConnectionEvent {
     /// Connection closed.
     Disconnected,
     /// Pairing requested.
-    PairRequested { device_id: String },
+    PairRequested { 
+        device_id: String,
+        device_name: Option<String>,
+    },
     /// Error occurred.
     Error(String),
 }
@@ -59,6 +63,14 @@ pub enum ConnectionState {
     Disconnected,
 }
 
+/// Pending pairing state during ECDH exchange.
+struct PendingPairing {
+    android_device_id: String,
+    android_device_name: Option<String>,
+    android_public_key: String,
+    desktop_keypair: EcdhKeypair,
+}
+
 /// Shared state for the GATT server.
 struct ServerState {
     reassembler: MessageReassembler,
@@ -67,6 +79,7 @@ struct ServerState {
     state: ConnectionState,
     negotiated_mtu: usize,
     status_code: StatusCode,
+    pending_pairing: Option<PendingPairing>,
 }
 
 impl ServerState {
@@ -78,6 +91,7 @@ impl ServerState {
             state: ConnectionState::AwaitingPair,
             negotiated_mtu: config::DEFAULT_MTU,
             status_code: StatusCode::Idle,
+            pending_pairing: None,
         }
     }
 }
@@ -412,14 +426,34 @@ impl GattServer {
                         }
                     };
 
-                    info!("Pairing request from device: {}", payload.device_id);
+                    info!("Pairing request from device: {} ({})", 
+                          payload.device_name.as_deref().unwrap_or("Unknown"),
+                          payload.device_id);
+
+                    // Validate public key is present
+                    if payload.public_key.is_empty() {
+                        error!("PAIR_REQ missing public key");
+                        return Ok(());
+                    }
+
+                    // Generate desktop ECDH keypair
+                    let desktop_keypair = EcdhKeypair::generate();
+
+                    // Store pending pairing data
                     state_guard.device_id = Some(payload.device_id.clone());
                     state_guard.status_code = StatusCode::AwaitingPairing;
+                    state_guard.pending_pairing = Some(PendingPairing {
+                        android_device_id: payload.device_id.clone(),
+                        android_device_name: payload.device_name.clone(),
+                        android_public_key: payload.public_key,
+                        desktop_keypair,
+                    });
 
-                    // Emit pairing requested event
+                    // Emit pairing requested event with device name
                     let _ = event_tx
                         .send(ConnectionEvent::PairRequested {
                             device_id: payload.device_id,
+                            device_name: payload.device_name,
                         })
                         .await;
 
@@ -524,52 +558,47 @@ impl GattServer {
         }
     }
 
-    /// Complete pairing with a PIN.
-    pub async fn complete_pairing(&self, pin: &str) -> Result<()> {
+    /// Complete pairing after user approval (ECDH key exchange).
+    pub async fn complete_pairing(&self) -> Result<()> {
         let mut state = self.state.write().await;
 
-        let android_device_id = state
-            .device_id
-            .as_ref()
-            .ok_or_else(|| anyhow!("No device ID set"))?
-            .clone();
+        let pending = state.pending_pairing.take()
+            .ok_or_else(|| anyhow!("No pending pairing request"))?;
 
-        // Derive crypto context from PIN
-        let crypto = CryptoContext::from_pin(pin, &android_device_id, &self.linux_device_id);
+        // Get desktop public key before consuming keypair
+        let desktop_public_key = pending.desktop_keypair.public_key_base64();
 
-        // Create PAIR_ACK response
-        let payload = PairAckPayload::success(&self.linux_device_id);
+        // Compute ECDH shared secret
+        let shared_secret = pending.desktop_keypair
+            .compute_shared_secret_base64(&pending.android_public_key)?;
+
+        // Derive crypto context from ECDH shared secret
+        let crypto = CryptoContext::from_ecdh(
+            &shared_secret,
+            &pending.android_device_id,
+            &self.linux_device_id,
+        );
+
+        // Create PAIR_ACK with desktop's public key
+        let payload = PairAckPayload::success_with_key(&self.linux_device_id, desktop_public_key);
         let response = Message::new(MessageType::PairAck, payload.to_json()?);
-
-        // NOTE: Do NOT sign PAIR_ACK - Android needs the Linux device ID from this
-        // message to derive the shared key, so signing creates a chicken-and-egg problem.
 
         // Update state
         state.crypto = Some(Arc::new(crypto));
         state.state = ConnectionState::Authenticated;
         state.status_code = StatusCode::Paired;
 
-        info!("Pairing completed with device: {}", android_device_id);
+        info!("Pairing completed with device: {}", pending.android_device_id);
 
         // Send PAIR_ACK
         let json = response.to_json()?;
-        info!("Sending PAIR_ACK: {} bytes", json.len());
         let packets = chunk_message(json.as_bytes(), state.negotiated_mtu);
-        info!("PAIR_ACK chunked into {} packets", packets.len());
 
         let tx_guard = self.response_tx.lock().await;
         if let Some(ref tx) = *tx_guard {
-            for (i, packet) in packets.iter().enumerate() {
-                info!("Sending PAIR_ACK packet {}/{} ({} bytes)", i + 1, packets.len(), packet.len());
-                if let Err(e) = tx.send(packet.clone()).await {
-                    error!("Failed to queue PAIR_ACK packet: {}", e);
-                    return Err(e.into());
-                }
+            for packet in packets {
+                tx.send(packet).await?;
             }
-            info!("All PAIR_ACK packets queued successfully");
-        } else {
-            error!("Response TX sender is None - cannot send PAIR_ACK!");
-            return Err(anyhow!("Response TX sender not available"));
         }
 
         // Notify status change
@@ -579,10 +608,9 @@ impl GattServer {
         }
 
         // Emit connected event
-        let _ = self
-            .event_tx
+        let _ = self.event_tx
             .send(ConnectionEvent::Connected {
-                device_name: android_device_id,
+                device_name: pending.android_device_name.unwrap_or(pending.android_device_id),
             })
             .await;
 

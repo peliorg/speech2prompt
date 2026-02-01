@@ -66,9 +66,11 @@ impl EventProcessor {
             ConnectionEvent::Disconnected => {
                 info!("Device disconnected");
             }
-            ConnectionEvent::PairRequested { device_id } => {
-                info!("Pairing requested by: {}", device_id);
-                // TODO: Trigger UI for PIN entry
+            ConnectionEvent::PairRequested { device_id, device_name } => {
+                info!("Pairing requested by: {} ({})", 
+                      device_name.as_deref().unwrap_or("Unknown"), 
+                      device_id);
+                // Handled by main event loop
             }
             ConnectionEvent::Error(e) => {
                 error!("Connection error: {}", e);

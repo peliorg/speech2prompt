@@ -138,6 +138,9 @@ dependencies {
     // Networking
     implementation(libs.bundles.networking)
 
+    // ECDH Key Exchange (X25519 support for API < 33)
+    implementation("org.bouncycastle:bcprov-jdk18on:1.77")
+
     // Unit Testing
     testImplementation(libs.bundles.testing.unit)
     testImplementation(libs.robolectric)

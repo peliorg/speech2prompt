@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import com.speech2prompt.service.ble.*
 import com.speech2prompt.util.crypto.CryptoManager
+import com.speech2prompt.util.crypto.EcdhManager
 import com.speech2prompt.util.crypto.SecureStorageManager
 import dagger.Module
 import dagger.Provides
@@ -85,6 +86,7 @@ object BleModule {
         connection: BleConnection,
         characteristicHandler: BleCharacteristicHandler,
         cryptoManager: CryptoManager,
+        ecdhManager: EcdhManager,
         secureStorage: SecureStorageManager
     ): BleManager {
         return BleManager(
@@ -92,6 +94,7 @@ object BleModule {
             connection = connection,
             characteristicHandler = characteristicHandler,
             cryptoManager = cryptoManager,
+            ecdhManager = ecdhManager,
             secureStorage = secureStorage
         )
     }

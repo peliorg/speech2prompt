@@ -3,8 +3,6 @@ package com.speech2prompt.presentation.screens.connection
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,8 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -31,7 +27,7 @@ import com.speech2prompt.util.permissions.rememberPermissionState
  * - Device scanning with refresh button
  * - List of discovered devices (using DeviceListItem)
  * - Connection state display
- * - Pairing dialog with PIN entry
+ * - Automatic pairing via ECDH
  * - Navigate back when connected
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,7 +41,6 @@ fun ConnectionScreen(
     val connectedDevice by viewModel.connectedDevice.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
     val bluetoothEnabled by viewModel.bluetoothEnabled.collectAsState()
-    val showPairingDialog by viewModel.showPairingDialog.collectAsState()
     val error by viewModel.error.collectAsState()
     
     val snackbarHostState = remember { SnackbarHostState() }
@@ -65,23 +60,14 @@ fun ConnectionScreen(
         }
     )
     
-    // Auto-navigate back when connected (only if not entering pairing flow)
-    // Key includes showPairingDialog to cancel pending navigation if dialog appears
-    LaunchedEffect(connectionState, showPairingDialog) {
-        if (connectionState == BtConnectionState.CONNECTED && !showPairingDialog) {
+    // Auto-navigate back when connected
+    LaunchedEffect(connectionState) {
+        if (connectionState == BtConnectionState.CONNECTED) {
             // Give user a moment to see connection success
-            // Use longer delay (750ms) to allow pairing flow to start if needed
-            // (sendPairingRequest has 500ms delay, so we need to wait for that plus response time)
-            kotlinx.coroutines.delay(750)
-            // Re-check BOTH state and dialog after delay
-            // - State may have changed to AWAITING_PAIRING
-            // - Dialog may have appeared during the delay
-            val currentState = viewModel.connectionState.value
-            val dialogShowing = viewModel.showPairingDialog.value
-            if (currentState == BtConnectionState.CONNECTED && !dialogShowing) {
+            kotlinx.coroutines.delay(1000)
+            if (viewModel.connectionState.value == BtConnectionState.CONNECTED) {
                 onNavigateBack()
             }
-            // If state changed to AWAITING_PAIRING or dialog is showing, don't navigate - let user enter PIN
         }
     }
     
@@ -165,14 +151,6 @@ fun ConnectionScreen(
                 onRequestPermissions = { permissionState.launchPermissionRequest() }
             )
         }
-    }
-    
-    // Pairing Dialog
-    if (showPairingDialog) {
-        PairingDialog(
-            onSubmit = viewModel::submitPairingPin,
-            onDismiss = viewModel::cancelPairing
-        )
     }
 }
 
@@ -372,83 +350,6 @@ private fun EmptyDeviceList(onStartScan: () -> Unit) {
             }
         )
     }
-}
-
-@Composable
-private fun PairingDialog(
-    onSubmit: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var pin by remember { mutableStateOf("") }
-    val isValid = pin.length == 6 && pin.all { it.isDigit() }
-    
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "Enter Pairing PIN",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-        },
-        text = {
-            Column {
-                Text(
-                    text = "Enter the 6-digit PIN displayed on your computer",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = OnBackgroundMuted
-                )
-                Spacer(Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = pin,
-                    onValueChange = { if (it.length <= 6) pin = it },
-                    label = { Text("PIN") },
-                    placeholder = { Text("000000") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = pin.isNotEmpty() && !isValid
-                )
-                if (pin.isNotEmpty() && !isValid) {
-                    Text(
-                        text = "PIN must be exactly 6 digits",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Error,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { 
-                    if (isValid) {
-                        onSubmit(pin)
-                    }
-                },
-                enabled = isValid,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Primary,
-                    contentColor = OnPrimary
-                )
-            ) {
-                Text("Submit")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = OnBackgroundMuted
-                )
-            ) {
-                Text("Cancel")
-            }
-        },
-        shape = RoundedCornerShape(24.dp),
-        containerColor = Surface,
-        tonalElevation = 8.dp
-    )
 }
 
 @Preview(showBackground = true)

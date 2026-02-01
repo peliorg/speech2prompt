@@ -14,7 +14,7 @@ import java.security.MessageDigest
 /**
  * Protocol version for message compatibility
  */
-const val PROTOCOL_VERSION = 1
+const val PROTOCOL_VERSION = 2
 
 /**
  * JSON configuration for message serialization
@@ -88,7 +88,9 @@ data class Message(
     val shouldEncrypt: Boolean
         get() = when (messageType) {
             MessageType.PAIR_REQ,
-            MessageType.PAIR_ACK -> false
+            MessageType.PAIR_ACK,
+            MessageType.ACK,
+            MessageType.HEARTBEAT -> false
             else -> true
         }
 

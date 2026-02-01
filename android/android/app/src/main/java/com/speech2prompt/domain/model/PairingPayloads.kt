@@ -12,16 +12,20 @@ data class PairRequestPayload(
     val deviceId: String,
 
     @SerialName("device_name")
-    val deviceName: String? = null
+    val deviceName: String? = null,
+    
+    @SerialName("public_key")
+    val publicKey: String
 ) {
     companion object {
         /**
          * Create payload from device info
          */
-        fun create(deviceId: String, deviceName: String? = null): PairRequestPayload {
+        fun create(deviceId: String, deviceName: String? = null, publicKey: String): PairRequestPayload {
             return PairRequestPayload(
                 deviceId = deviceId,
-                deviceName = deviceName ?: "Android Device"
+                deviceName = deviceName ?: "Android Device",
+                publicKey = publicKey
             )
         }
     }
@@ -41,8 +45,8 @@ data class PairAckPayload(
     @SerialName("error")
     val error: String? = null,
 
-    @SerialName("shared_secret")
-    val sharedSecret: String? = null
+    @SerialName("public_key")
+    val publicKey: String? = null
 ) {
     /**
      * Parsed status enum
@@ -61,11 +65,11 @@ data class PairAckPayload(
         /**
          * Create success response
          */
-        fun success(deviceId: String, sharedSecret: String): PairAckPayload {
+        fun success(deviceId: String, publicKey: String): PairAckPayload {
             return PairAckPayload(
                 deviceId = deviceId,
                 status = PairStatus.OK.value,
-                sharedSecret = sharedSecret
+                publicKey = publicKey
             )
         }
 

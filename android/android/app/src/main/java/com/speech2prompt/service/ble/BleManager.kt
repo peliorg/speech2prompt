@@ -10,6 +10,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.speech2prompt.util.crypto.EcdhManager
+import java.security.KeyPair
 
 /**
  * High-level BLE manager integrating all BLE components.
@@ -28,6 +30,7 @@ class BleManager @Inject constructor(
     private val connection: BleConnection,
     private val characteristicHandler: BleCharacteristicHandler,
     private val cryptoManager: CryptoManager,
+    private val ecdhManager: EcdhManager,
     private val secureStorage: SecureStorageManager
 ) {
     companion object {
@@ -43,7 +46,7 @@ class BleManager @Inject constructor(
     private var sharedSecret: ByteArray? = null
     private var deviceId: String? = null
     private var linuxDeviceId: String? = null
-    private var pendingPin: String? = null  // PIN entered before PAIR_ACK received
+    private var ecdhKeyPair: KeyPair? = null
     
     // State flows
     val connectionState: StateFlow<BtConnectionState> = connection.connectionState
@@ -177,55 +180,7 @@ class BleManager @Inject constructor(
         }
     }
     
-    /**
-     * Set pairing PIN and derive shared secret.
-     * 
-     * If linuxDeviceId is not yet available (PAIR_ACK not received), the PIN is stored
-     * and the shared secret will be derived when PAIR_ACK arrives.
-     */
-    suspend fun setPairingPin(pin: String) {
-        // Store the PIN in case we need it later (when PAIR_ACK arrives)
-        pendingPin = pin
-        
-        if (linuxDeviceId == null) {
-            Log.d(TAG, "PIN stored, waiting for PAIR_ACK with Linux device ID")
-            return
-        }
-        
-        // linuxDeviceId is available, derive the shared secret now
-        deriveSharedSecret(pin)
-    }
-    
-    /**
-     * Internal method to derive shared secret from PIN.
-     * Called either immediately from setPairingPin (if linuxDeviceId available)
-     * or from handlePairAck (when linuxDeviceId becomes available).
-     */
-    private suspend fun deriveSharedSecret(pin: String) {
-        val linuxId = linuxDeviceId
-        if (linuxId == null) {
-            Log.e(TAG, "Cannot derive shared secret: Linux device ID not available")
-            return
-        }
-        
-        val myDeviceId = getOrCreateDeviceId()
-        
-        // Derive shared secret from PIN
-        val result = cryptoManager.deriveKey(pin, myDeviceId, linuxId)
-        result.onSuccess { key ->
-            sharedSecret = key
-            pendingPin = null  // Clear pending PIN after successful derivation
-            Log.d(TAG, "Shared secret derived from PIN")
-            
-            // Store pairing
-            _connectedDevice.value?.let { device ->
-                storePairing(device.address, linuxId, key)
-            }
-        }.onFailure { e ->
-            Log.e(TAG, "Failed to derive key: ${e.message}")
-            _error.value = "Failed to derive encryption key"
-        }
-    }
+
     
     /**
      * Get or create device ID.
@@ -245,7 +200,7 @@ class BleManager @Inject constructor(
         sharedSecret?.let { cryptoManager.wipeBytes(it) }
         sharedSecret = null
         linuxDeviceId = null
-        pendingPin = null
+        ecdhKeyPair = null
         Log.d(TAG, "Crypto context cleared")
     }
     
@@ -373,18 +328,34 @@ class BleManager @Inject constructor(
     
     private suspend fun sendPairingRequest() {
         val myDeviceId = getOrCreateDeviceId()
-        val payload = PairRequestPayload.create(myDeviceId, "Android Device")
+        
+        // Generate ECDH keypair
+        val keypairResult = ecdhManager.generateKeyPair()
+        if (keypairResult.isFailure) {
+            Log.e(TAG, "Failed to generate ECDH keypair: ${keypairResult.exceptionOrNull()}")
+            _error.value = "Failed to generate encryption keys"
+            return
+        }
+        ecdhKeyPair = keypairResult.getOrThrow()
+        
+        // Get public key as base64
+        val publicKeyResult = ecdhManager.getPublicKeyBase64(ecdhKeyPair!!)
+        if (publicKeyResult.isFailure) {
+            Log.e(TAG, "Failed to extract public key: ${publicKeyResult.exceptionOrNull()}")
+            _error.value = "Failed to extract encryption key"
+            ecdhKeyPair = null
+            return
+        }
+        val publicKey = publicKeyResult.getOrThrow()
+        
+        val payload = PairRequestPayload.create(myDeviceId, "Android Device", publicKey)
         val message = Message.pairRequest(payload)
         val success = sendMessage(message)
         
-        // If we don't have an existing shared secret, we need to show PIN dialog
-        // The desktop shows its PIN dialog when it receives PAIR_REQ, so we need
-        // to show ours as well. The desktop may not send AWAITING_PAIRING status
-        // notification, so we trigger the state change ourselves after sending PAIR_REQ.
-        if (success && sharedSecret == null) {
-            Log.d(TAG, "No existing pairing - triggering PIN dialog")
-            connection.setAwaitingPairing()
+        if (!success) {
+            ecdhKeyPair = null
         }
+        // No PIN dialog - desktop will show yes/no confirmation
     }
     
     private fun handlePairAck(message: Message) {
@@ -395,36 +366,67 @@ class BleManager @Inject constructor(
             return
         }
         
-        Log.d(TAG, "PAIR_ACK payload: deviceId=${payload.deviceId}, isSuccess=${payload.isSuccess}, error=${payload.error}")
+        Log.d(TAG, "PAIR_ACK: deviceId=${payload.deviceId}, isSuccess=${payload.isSuccess}")
         
         if (payload.isSuccess) {
-            linuxDeviceId = payload.deviceId
-            Log.d(TAG, "Pairing successful with ${payload.deviceId}")
+            val keypair = ecdhKeyPair
+            val desktopPublicKey = payload.publicKey
             
-            // If we have a pending PIN (user entered PIN before PAIR_ACK arrived),
-            // derive the shared secret now that we have the linux device ID
-            val pin = pendingPin
-            if (pin != null && sharedSecret == null) {
-                Log.d(TAG, "Deriving shared secret with pending PIN")
-                scope.launch {
-                    deriveSharedSecret(pin)
-                    // Transition to CONNECTED only after shared secret is derived
-                    connection.completePairing()
-                    // Send pending messages
-                    sendPendingMessages()
+            if (keypair == null) {
+                Log.e(TAG, "No ECDH keypair available")
+                _error.value = "Pairing state error"
+                connection.failPairing()
+                return
+            }
+            
+            if (desktopPublicKey.isNullOrEmpty()) {
+                Log.e(TAG, "PAIR_ACK missing desktop public key")
+                _error.value = "Invalid pairing response"
+                connection.failPairing()
+                return
+            }
+            
+            linuxDeviceId = payload.deviceId
+            Log.d(TAG, "Computing ECDH shared secret...")
+            
+            scope.launch {
+                // Compute ECDH shared secret
+                val sharedSecretResult = ecdhManager.computeSharedSecret(keypair, desktopPublicKey)
+                if (sharedSecretResult.isFailure) {
+                    Log.e(TAG, "Failed to compute shared secret: ${sharedSecretResult.exceptionOrNull()}")
+                    _error.value = "Failed to establish secure connection"
+                    ecdhKeyPair = null
+                    connection.failPairing()
+                    return@launch
                 }
-            } else {
-                // Shared secret already available (or no PIN entered yet)
-                // Transition back to CONNECTED state now that pairing is complete
-                connection.completePairing()
-                // Send pending messages
-                sendPendingMessages()
+                val ecdhSharedSecret = sharedSecretResult.getOrThrow()
+                
+                // Derive AES key from ECDH shared secret
+                val myDeviceId = getOrCreateDeviceId()
+                val keyResult = cryptoManager.deriveKeyFromEcdh(ecdhSharedSecret, myDeviceId, payload.deviceId)
+                
+                keyResult.onSuccess { key ->
+                    sharedSecret = key
+                    ecdhKeyPair = null
+                    Log.d(TAG, "Shared secret derived via ECDH")
+                    
+                    _connectedDevice.value?.let { device ->
+                        storePairing(device.address, payload.deviceId, key)
+                    }
+                    
+                    connection.completePairing()
+                    sendPendingMessages()
+                }.onFailure { e ->
+                    Log.e(TAG, "Failed to derive key: ${e.message}")
+                    _error.value = "Failed to establish secure connection"
+                    ecdhKeyPair = null
+                    connection.failPairing()
+                }
             }
         } else {
-            Log.e(TAG, "Pairing failed: ${payload.error}")
-            _error.value = payload.error ?: "Pairing failed"
-            pendingPin = null  // Clear pending PIN on failure
-            // Transition to FAILED state on pairing failure
+            Log.e(TAG, "Pairing rejected: ${payload.error}")
+            _error.value = payload.error ?: "Connection rejected"
+            ecdhKeyPair = null
             connection.failPairing()
         }
     }

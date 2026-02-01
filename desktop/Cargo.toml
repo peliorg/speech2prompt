@@ -38,6 +38,7 @@ pbkdf2 = { version = "0.12", features = ["simple"] }
 rand = "0.8"
 base64 = "0.21"
 hex = "0.4"
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 
 # Utilities
 dirs = "5.0"

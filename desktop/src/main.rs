@@ -36,10 +36,11 @@ use events::EventProcessor;
 use state::AppState;
 use storage::History;
 
-/// Request to show PIN dialog for pairing.
+/// Request to show confirmation dialog for pairing.
 #[derive(Debug, Clone)]
 struct PairingRequest {
     device_id: String,
+    device_name: Option<String>,
 }
 
 #[tokio::main]
@@ -128,11 +129,12 @@ async fn main() -> Result<()> {
                     info!("BLE text received: {}", text);
                     state_gatt.set_last_text(text.clone());
                 }
-                bluetooth::ConnectionEvent::PairRequested { device_id } => {
+                bluetooth::ConnectionEvent::PairRequested { device_id, device_name } => {
                     info!("BLE pairing requested by: {}", device_id);
-                    // Send to main loop for PIN dialog handling
+                    // Send to main loop for confirmation dialog handling
                     let _ = pairing_tx.send(PairingRequest { 
-                        device_id: device_id.clone() 
+                        device_id: device_id.clone(),
+                        device_name: device_name.clone(),
                     }).await;
                 }
                 bluetooth::ConnectionEvent::CommandReceived(_) => {
@@ -181,29 +183,25 @@ async fn main() -> Result<()> {
                 }
             }
             Some(request) = pairing_rx.recv() => {
-                info!("Showing PIN dialog for device: {}", request.device_id);
+                let display_name = request.device_name.unwrap_or_else(|| request.device_id.clone());
+                info!("Showing confirmation dialog for device: {}", display_name);
                 
-                // Show PIN dialog
-                let mut pin_rx = ui::show_pin_dialog(&gtk_app, &request.device_id);
+                // Show confirmation dialog
+                let mut confirm_rx = ui::show_confirmation_dialog(&gtk_app, &display_name);
                 
                 // Process GTK events until dialog closes
-                // We need to run the GTK main loop to handle the dialog
                 let result = loop {
-                    // Process GTK events
                     while gtk4::glib::MainContext::default().pending() {
                         gtk4::glib::MainContext::default().iteration(false);
                     }
                     
-                    // Check if dialog result is ready
-                    match pin_rx.try_recv() {
+                    match confirm_rx.try_recv() {
                         Ok(result) => break result,
                         Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
-                            // Not ready yet, sleep briefly and continue
                             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
                         }
                         Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
-                            // Channel closed without result, treat as cancelled
-                            break ui::PinDialogResult::Cancelled;
+                            break ui::ConfirmationResult::Rejected;
                         }
                     }
                 };
@@ -211,15 +209,15 @@ async fn main() -> Result<()> {
                 // Handle result
                 let server = gatt_server.lock().await;
                 match result {
-                    ui::PinDialogResult::Pin(pin) => {
-                        info!("PIN entered, completing pairing");
-                        if let Err(e) = server.complete_pairing(&pin).await {
+                    ui::ConfirmationResult::Approved => {
+                        info!("User approved pairing");
+                        if let Err(e) = server.complete_pairing().await {
                             error!("Pairing failed: {}", e);
                         }
                     }
-                    ui::PinDialogResult::Cancelled => {
-                        info!("Pairing cancelled by user");
-                        if let Err(e) = server.reject_pairing("User cancelled").await {
+                    ui::ConfirmationResult::Rejected => {
+                        info!("User rejected pairing");
+                        if let Err(e) = server.reject_pairing("User rejected").await {
                             error!("Failed to send rejection: {}", e);
                         }
                     }

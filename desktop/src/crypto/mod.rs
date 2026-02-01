@@ -14,6 +14,8 @@
 
 //! Cryptography module for message encryption and verification.
 
+pub mod ecdh;
+
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,
@@ -44,6 +46,12 @@ impl CryptoContext {
     /// Derive a crypto context from PIN and device IDs.
     pub fn from_pin(pin: &str, android_id: &str, linux_id: &str) -> Self {
         let key = derive_key(pin, android_id, linux_id);
+        Self { key }
+    }
+
+    /// Create from ECDH shared secret and device IDs.
+    pub fn from_ecdh(shared_secret: &[u8; 32], android_id: &str, linux_id: &str) -> Self {
+        let key = derive_key_from_ecdh(shared_secret, android_id, linux_id);
         Self { key }
     }
 
@@ -88,6 +96,19 @@ pub fn derive_key(pin: &str, android_id: &str, linux_id: &str) -> [u8; KEY_SIZE]
 
     pbkdf2_hmac::<Sha256>(password.as_bytes(), SALT, PBKDF2_ITERATIONS, &mut key);
 
+    key
+}
+
+/// Derive a 256-bit key from ECDH shared secret and device identifiers.
+/// The shared secret provides the cryptographic strength, device IDs provide binding.
+pub fn derive_key_from_ecdh(
+    shared_secret: &[u8; 32],
+    android_id: &str,
+    linux_id: &str,
+) -> [u8; KEY_SIZE] {
+    let password = format!("{}{}{}", hex::encode(shared_secret), android_id, linux_id);
+    let mut key = [0u8; KEY_SIZE];
+    pbkdf2_hmac::<Sha256>(password.as_bytes(), SALT, PBKDF2_ITERATIONS, &mut key);
     key
 }
 

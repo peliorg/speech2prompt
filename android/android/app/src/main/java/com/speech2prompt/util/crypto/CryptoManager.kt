@@ -96,6 +96,45 @@ class CryptoManager @Inject constructor() {
             Result.failure(CryptoException("Key derivation failed: ${e.message}", e))
         }
     }
+
+    /**
+     * Derives an AES-256 key from ECDH shared secret and device identifiers.
+     * The shared secret provides cryptographic strength, device IDs provide binding.
+     */
+    fun deriveKeyFromEcdh(
+        sharedSecret: ByteArray,
+        androidId: String,
+        linuxId: String
+    ): Result<ByteArray> {
+        return try {
+            if (sharedSecret.size != 32) {
+                return Result.failure(
+                    IllegalArgumentException("Shared secret must be 32 bytes, got ${sharedSecret.size}")
+                )
+            }
+            // Convert shared secret to hex for consistent cross-platform representation
+            val sharedSecretHex = sharedSecret.joinToString("") { "%02x".format(it) }
+            val password = "$sharedSecretHex$androidId$linuxId"
+            
+            val factory = SecretKeyFactory.getInstance(PBKDF2_ALGORITHM)
+            val spec = PBEKeySpec(
+                password.toCharArray(),
+                SALT,
+                PBKDF2_ITERATIONS,
+                KEY_LENGTH_BITS
+            )
+            
+            val key = try {
+                factory.generateSecret(spec).encoded
+            } finally {
+                spec.clearPassword()
+            }
+            
+            Result.success(key)
+        } catch (e: Exception) {
+            Result.failure(CryptoException("Key derivation from ECDH failed: ${e.message}", e))
+        }
+    }
     
     /**
      * Encrypts plaintext using AES-256-GCM.

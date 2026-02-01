@@ -72,6 +72,10 @@ class SpeechRecognitionManager @Inject constructor(
     private var restartScheduled = false
     private var restartJob: Job? = null
     
+    // Flag to prevent auto-restart when stop was explicitly requested
+    @Volatile
+    private var stopRequested = false
+    
     // Watchdog
     private var watchdogJob: Job? = null
     private var lastSuccessfulListening: Long? = null
@@ -183,6 +187,9 @@ class SpeechRecognitionManager @Inject constructor(
     suspend fun startListening(): Boolean {
         Log.d(TAG, "startListening() called, current state: $recognizerState")
         
+        // Clear the stop flag when explicitly starting
+        stopRequested = false
+        
         if (!_isInitialized.value) {
             Log.w(TAG, "Cannot start - not initialized")
             return false
@@ -225,9 +232,13 @@ class SpeechRecognitionManager @Inject constructor(
     
     /**
      * Stop listening for speech.
+     * Sets a flag to prevent auto-restart.
      */
     suspend fun stopListening() {
         Log.d(TAG, "stopListening() called, current state: $recognizerState")
+        
+        // Set flag to prevent auto-restart from onResults/onError callbacks
+        stopRequested = true
         
         cancelScheduledRestart()
         
@@ -479,8 +490,8 @@ class SpeechRecognitionManager @Inject constructor(
     }
     
     private fun scheduleRestart(wasSuccessful: Boolean, delay: Duration = Duration.ZERO) {
-        if (_isPaused.value || !autoRestart) {
-            Log.d(TAG, "Restart skipped: paused=${_isPaused.value}, autoRestart=$autoRestart")
+        if (_isPaused.value || !autoRestart || stopRequested) {
+            Log.d(TAG, "Restart skipped: paused=${_isPaused.value}, autoRestart=$autoRestart, stopRequested=$stopRequested")
             return
         }
         
@@ -501,10 +512,13 @@ class SpeechRecognitionManager @Inject constructor(
             
             restartScheduled = false
             
-            if (!_isPaused.value && autoRestart) {
+            // Re-check stopRequested after delay in case stop was called during wait
+            if (!_isPaused.value && autoRestart && !stopRequested) {
                 Log.d(TAG, "Auto-restarting recognition")
                 transitionState(RecognizerState.IDLE)
                 startListening()
+            } else {
+                Log.d(TAG, "Restart cancelled: paused=${_isPaused.value}, autoRestart=$autoRestart, stopRequested=$stopRequested")
             }
         }
     }
@@ -558,6 +572,12 @@ class SpeechRecognitionManager @Inject constructor(
     private suspend fun forceFullRestart() {
         Log.d(TAG, "Force full restart initiated")
         
+        // Don't restart if stop was explicitly requested
+        if (stopRequested) {
+            Log.d(TAG, "Force restart skipped - stop was requested")
+            return
+        }
+        
         withContext(Dispatchers.Main) {
             try {
                 // Cancel and destroy current recognizer
@@ -571,8 +591,8 @@ class SpeechRecognitionManager @Inject constructor(
                 
                 transitionState(RecognizerState.IDLE)
                 
-                // Restart if needed
-                if (!_isPaused.value && autoRestart) {
+                // Restart if needed (and stop wasn't requested)
+                if (!_isPaused.value && autoRestart && !stopRequested) {
                     delay(500.milliseconds)
                     startListening()
                 }

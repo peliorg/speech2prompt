@@ -21,7 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::crypto::CryptoContext;
 
 /// Protocol version.
-pub const PROTOCOL_VERSION: u8 = 1;
+pub const PROTOCOL_VERSION: u8 = 2;
 
 /// Message types supported by the protocol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -187,13 +187,15 @@ pub struct PairRequestPayload {
     pub device_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub device_name: Option<String>,
+    pub public_key: String,
 }
 
 impl PairRequestPayload {
-    pub fn new(device_id: impl Into<String>) -> Self {
+    pub fn new(device_id: impl Into<String>, public_key: impl Into<String>) -> Self {
         Self {
             device_id: device_id.into(),
             device_name: None,
+            public_key: public_key.into(),
         }
     }
 
@@ -218,6 +220,8 @@ pub struct PairAckPayload {
     pub status: PairStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub public_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -233,6 +237,16 @@ impl PairAckPayload {
             device_id: device_id.into(),
             status: PairStatus::Ok,
             error: None,
+            public_key: None,
+        }
+    }
+
+    pub fn success_with_key(device_id: impl Into<String>, public_key: impl Into<String>) -> Self {
+        Self {
+            device_id: device_id.into(),
+            status: PairStatus::Ok,
+            error: None,
+            public_key: Some(public_key.into()),
         }
     }
 
@@ -241,6 +255,7 @@ impl PairAckPayload {
             device_id: device_id.into(),
             status: PairStatus::Error,
             error: Some(error.into()),
+            public_key: None,
         }
     }
 
@@ -300,13 +315,13 @@ mod tests {
         let msg = Message::text("Hello, World!");
         let json = msg.to_json().unwrap();
 
-        assert!(json.contains("\"v\":1"));
+        assert!(json.contains("\"v\":2"));
         assert!(json.contains("\"t\":\"TEXT\""));
         assert!(json.contains("\"p\":\"Hello, World!\""));
         assert!(json.ends_with('\n'));
 
         let parsed = Message::from_json(&json).unwrap();
-        assert_eq!(parsed.version, 1);
+        assert_eq!(parsed.version, 2);
         assert_eq!(parsed.message_type, MessageType::Text);
         assert_eq!(parsed.payload, "Hello, World!");
     }
@@ -344,25 +359,29 @@ mod tests {
     fn test_command_codes() {
         assert_eq!(CommandCode::parse("ENTER"), Some(CommandCode::Enter));
         assert_eq!(CommandCode::parse("enter"), Some(CommandCode::Enter));
-        assert_eq!(CommandCode::parse("SELECT_ALL"), Some(CommandCode::SelectAll));
+        assert_eq!(
+            CommandCode::parse("SELECT_ALL"),
+            Some(CommandCode::SelectAll)
+        );
         assert_eq!(CommandCode::parse("invalid"), None);
     }
 
     #[test]
     fn test_pair_payloads() {
-        let req = PairRequestPayload::new("android-123")
-            .with_name("My Phone");
+        let req = PairRequestPayload::new("android-123", "test-public-key").with_name("My Phone");
         let json = req.to_json().unwrap();
         let parsed = PairRequestPayload::from_json(&json).unwrap();
-        
+
         assert_eq!(parsed.device_id, "android-123");
         assert_eq!(parsed.device_name, Some("My Phone".to_string()));
+        assert_eq!(parsed.public_key, "test-public-key");
 
-        let ack = PairAckPayload::success("linux-456");
+        let ack = PairAckPayload::success_with_key("linux-456", "linux-public-key");
         let json = ack.to_json().unwrap();
         let parsed = PairAckPayload::from_json(&json).unwrap();
-        
+
         assert_eq!(parsed.device_id, "linux-456");
         assert_eq!(parsed.status, PairStatus::Ok);
+        assert_eq!(parsed.public_key, Some("linux-public-key".to_string()));
     }
 }

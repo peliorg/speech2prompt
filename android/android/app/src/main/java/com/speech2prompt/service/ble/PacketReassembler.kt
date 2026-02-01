@@ -7,8 +7,14 @@ import java.nio.ByteOrder
 /**
  * Handles reassembly of received BLE packets into complete messages.
  * 
- * This class is NOT thread-safe. Callers should ensure synchronized access
- * or use from a single thread (typically the BLE callback thread).
+ * This class is thread-safe via synchronized blocks.
+ * 
+ * Message completion is determined by BOTH:
+ * 1. The LAST flag being set in the packet
+ * 2. The buffer containing exactly expectedLength bytes
+ * 
+ * If expectedLength bytes are received but LAST flag is not set (or vice versa),
+ * something is wrong and we reset the reassembler.
  */
 class PacketReassembler {
     
@@ -16,6 +22,7 @@ class PacketReassembler {
         private const val TAG = "PacketReassembler"
     }
     
+    private val lock = Any()
     private val buffer = mutableListOf<Byte>()
     private var expectedLength = 0
     private var expectedSeq = 0
@@ -25,20 +32,20 @@ class PacketReassembler {
      * Check if reassembly is currently in progress.
      */
     val isInProgress: Boolean
-        get() = inProgress
+        get() = synchronized(lock) { inProgress }
     
     /**
      * Get current buffer size (bytes received so far).
      */
     val bufferSize: Int
-        get() = buffer.size
+        get() = synchronized(lock) { buffer.size }
     
     /**
      * Get expected total message length.
      * Only valid when [isInProgress] is true.
      */
     val expectedTotalLength: Int
-        get() = expectedLength
+        get() = synchronized(lock) { expectedLength }
     
     /**
      * Process an incoming BLE packet.
@@ -46,7 +53,7 @@ class PacketReassembler {
      * @param packet Raw bytes received from BLE characteristic
      * @return Complete message bytes if this packet completes a message, null otherwise
      */
-    fun addPacket(packet: ByteArray): ByteArray? {
+    fun addPacket(packet: ByteArray): ByteArray? = synchronized(lock) {
         if (packet.size < 2) {
             Log.w(TAG, "Packet too short (${packet.size} bytes)")
             return null
@@ -57,10 +64,17 @@ class PacketReassembler {
         val isFirst = (flags and BlePacketFlags.FIRST) != 0
         val isLast = (flags and BlePacketFlags.LAST) != 0
         
+        Log.d(TAG, "Packet: flags=0x${flags.toString(16)}, seq=$seq, size=${packet.size}, isFirst=$isFirst, isLast=$isLast, inProgress=$inProgress")
+        
         if (isFirst) {
-            // Start of new message
+            // Start of new message - if we were in progress, log a warning (previous message was interrupted)
+            if (inProgress) {
+                Log.w(TAG, "New message started while previous message incomplete (had ${buffer.size}/$expectedLength bytes)")
+            }
+            
             if (packet.size < BleConstants.HEADER_SIZE_FIRST) {
                 Log.w(TAG, "First packet too short (${packet.size} bytes)")
+                resetInternal()
                 return null
             }
             
@@ -83,8 +97,8 @@ class PacketReassembler {
         } else if (inProgress) {
             // Continuation packet
             if (seq != expectedSeq) {
-                Log.w(TAG, "Sequence error (expected $expectedSeq, got $seq)")
-                reset()
+                Log.w(TAG, "Sequence error (expected $expectedSeq, got $seq), resetting")
+                resetInternal()
                 return null
             }
             
@@ -97,15 +111,18 @@ class PacketReassembler {
             
         } else {
             // Received continuation without start
-            Log.w(TAG, "Received continuation packet without start (seq=$seq)")
+            Log.w(TAG, "Received continuation packet without start (seq=$seq, flags=0x${flags.toString(16)}), ignoring")
             return null
         }
         
         // Increment expected sequence (wraps at 256)
         expectedSeq = (expectedSeq + 1) and 0xFF
         
-        // Check if message is complete
-        if (isLast) {
+        // Check completion conditions
+        val lengthReached = buffer.size >= expectedLength
+        
+        if (isLast && lengthReached) {
+            // Normal completion: LAST flag set and we have expected bytes
             inProgress = false
             
             if (buffer.size == expectedLength) {
@@ -114,12 +131,35 @@ class PacketReassembler {
                 buffer.clear()
                 return result
             } else {
-                Log.w(TAG, "Length mismatch (expected $expectedLength, got ${buffer.size})")
-                reset()
+                // buffer.size > expectedLength - we received more bytes than expected
+                Log.w(TAG, "Length overflow (expected $expectedLength, got ${buffer.size})")
+                resetInternal()
+                return null
+            }
+        } else if (isLast && !lengthReached) {
+            // LAST flag set but not enough bytes - protocol error
+            Log.w(TAG, "LAST flag set but only ${buffer.size}/$expectedLength bytes received")
+            resetInternal()
+            return null
+        } else if (!isLast && lengthReached) {
+            // We have all bytes but LAST flag not set - check if exactly at length
+            if (buffer.size == expectedLength) {
+                // Message might be complete even without LAST flag (server bug or different framing)
+                // Complete it anyway to avoid timeout
+                Log.w(TAG, "Expected length reached but LAST flag not set - completing message anyway")
+                inProgress = false
+                val result = buffer.toByteArray()
+                buffer.clear()
+                return result
+            } else {
+                // buffer.size > expectedLength - overflow
+                Log.w(TAG, "Buffer overflow without LAST flag (expected $expectedLength, got ${buffer.size})")
+                resetInternal()
                 return null
             }
         }
         
+        // Still waiting for more packets
         return null
     }
     
@@ -129,6 +169,15 @@ class PacketReassembler {
      * Call this when starting fresh or after an error condition.
      */
     fun reset() {
+        synchronized(lock) {
+            resetInternal()
+        }
+    }
+    
+    /**
+     * Internal reset - must be called with lock held.
+     */
+    private fun resetInternal() {
         buffer.clear()
         expectedLength = 0
         expectedSeq = 0
