@@ -7,9 +7,6 @@ This guide will walk you through setting up and testing Speech2Prompt on your Li
 Before starting, verify you have everything installed:
 
 ```bash
-# Check Flutter
-flutter --version
-
 # Check Rust
 rustc --version
 
@@ -110,27 +107,26 @@ default-agent
 ### Option A: Debug Build (Fast, for Testing)
 
 ```bash
-cd ~/workspace/priv/speech2prompt/android
-flutter pub get
-flutter build apk --debug
+cd ~/workspace/priv/speech2prompt/android/android
+./gradlew assembleDebug
 ```
 
-The APK will be at: `android/build/app/outputs/flutter-apk/app-debug.apk`
+The APK will be at: `app/build/outputs/apk/debug/app-debug.apk`
 
 ### Option B: Release Build (Optimized)
 
 ```bash
-cd ~/workspace/priv/speech2prompt/android
+cd ~/workspace/priv/speech2prompt/android/android
 
 # Generate a keystore (one-time setup)
-./scripts/generate-keystore.sh
-# Follow the prompts to create a keystore
+keytool -genkey -v -keystore release-key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias speech2prompt
 
-# Build release APK
-./scripts/build-release.sh
+# Create key.properties file with your keystore details
+# Then build release APK
+./gradlew assembleRelease
 ```
 
-The APK will be at: `android/build/app/outputs/flutter-apk/app-release.apk`
+The APK will be at: `app/build/outputs/apk/release/app-release.apk`
 
 ## Step 4: Install the Android App
 
@@ -140,7 +136,7 @@ The APK will be at: `android/build/app/outputs/flutter-apk/app-release.apk`
 ```bash
 # Connect your phone via USB and enable File Transfer mode
 # Copy the APK:
-cp android/build/app/outputs/flutter-apk/app-debug.apk ~/Downloads/
+cp android/android/app/build/outputs/apk/debug/app-debug.apk ~/Downloads/
 # Then use your file manager to transfer to phone
 ```
 
@@ -151,8 +147,8 @@ cp android/build/app/outputs/flutter-apk/app-debug.apk ~/Downloads/
 # Settings > Developer Options > Enable "USB Debugging"
 
 # Connect via USB and install:
-cd ~/workspace/priv/speech2prompt/android
-flutter install
+cd ~/workspace/priv/speech2prompt/android/android
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 **Option C: Web Transfer**
@@ -247,10 +243,8 @@ journalctl --user -u speech2prompt -f
 
 ```bash
 # Clean and rebuild
-cd ~/workspace/priv/speech2prompt/android
-flutter clean
-flutter pub get
-flutter build apk --debug
+cd ~/workspace/priv/speech2prompt/android/android
+./gradlew clean assembleDebug
 ```
 
 ### Connection Issues

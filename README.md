@@ -17,7 +17,7 @@ A voice-to-keyboard bridge that lets you dictate text directly into any applicat
 
 | Component | Technology | Description |
 |-----------|------------|-------------|
-| Android App | Flutter | Speech recognition, BLE GATT client |
+| Android App | Kotlin + Jetpack Compose | Speech recognition, BLE GATT client |
 | Linux Desktop | Rust + GTK4 | BLE GATT server, keyboard simulation, system tray |
 
 ## Quick Start
@@ -64,16 +64,16 @@ speech2prompt-desktop
 
 ### Prerequisites
 
-- **Android**: Flutter SDK 3.16+, Android SDK
+- **Android**: Android Studio, JDK 17+, Android SDK (API 26+)
 - **Linux**: Rust 1.70+, GTK4 dev libraries, BlueZ
 
 ### Build
 
 ```bash
 # Android
-cd android
-flutter pub get
-flutter build apk
+cd android/android
+./gradlew assembleDebug
+# Or for release: ./gradlew assembleRelease
 
 # Linux
 cd desktop
@@ -185,4 +185,10 @@ For the full license terms, see [http://www.apache.org/licenses/LICENSE-2.0](htt
 
 ## Contributing
 
-Contributions welcome! Please read CONTRIBUTING.md first.
+Contributions welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Submit a pull request
+
+For bug reports and feature requests, please open an issue on GitHub.

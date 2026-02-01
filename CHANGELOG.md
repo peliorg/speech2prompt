@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-01
+
+### Changed
+- **BREAKING**: Migrated Android app from Flutter to native Kotlin + Jetpack Compose
+- Complete rewrite of Android codebase using modern Android architecture (MVVM, Hilt, Coroutines)
+- Improved performance and reduced APK size with native implementation
+- Better Android platform integration and lifecycle management
+- Enhanced BLE reliability with improved state management
+
+### Fixed
+- Fixed incomplete message delivery when speaking repeated words
+- Fixed pairing state synchronization between Android and desktop
+- Improved duplicate message filtering algorithm
+- Better connection state machine with distinct PAIRING state
+
+### Technical
+- Android: Migrated to 100% Kotlin with Jetpack Compose UI
+- Android: Implemented MVVM architecture with Hilt dependency injection
+- Android: Added comprehensive unit and integration tests
+- Desktop: Version bumped to 0.4.0 for consistency
+- Improved code maintainability and type safety
+
 ## [0.2.5] - 2026-01-31
 
 ### Fixed
@@ -94,6 +116,7 @@ For users upgrading from 0.1.x:
 - HMAC-SHA256 message signing
 - Secure key derivation with PBKDF2
 
+[0.4.0]: https://github.com/peliorg/speech2prompt/compare/v0.2.5...v0.4.0
 [0.2.5]: https://github.com/peliorg/speech2prompt/compare/v0.2.0...v0.2.5
 [0.2.0]: https://github.com/peliorg/speech2prompt/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/peliorg/speech2prompt/releases/tag/v0.1.4
