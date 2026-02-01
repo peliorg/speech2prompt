@@ -259,12 +259,6 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true
-
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
         with:
@@ -276,33 +270,39 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Setup Android keystore
-        working-directory: android
+        working-directory: android/android
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
-          
-          cat > android/key.properties << EOF
+          # Create keystore if secrets are available
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > app/upload-keystore.jks
+            
+            cat > key.properties << EOF
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           storeFile=upload-keystore.jks
           EOF
+            echo "Keystore configured for release signing"
+          else
+            echo "No keystore secrets found, will use debug signing"
+          fi
 
-      - name: Get Flutter dependencies
-        working-directory: android
-        run: flutter pub get
+      - name: Make gradlew executable
+        working-directory: android/android
+        run: chmod +x gradlew
 
-      - name: Run Flutter tests
-        working-directory: android
-        run: flutter test
+      - name: Run tests
+        working-directory: android/android
+        run: ./gradlew test --stacktrace
 
       - name: Build release APK
-        working-directory: android
-        run: flutter build apk --release
+        working-directory: android/android
+        run: ./gradlew assembleRelease --stacktrace
 
       - name: Rename APK
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
-          cp android/build/app/outputs/flutter-apk/app-release.apk \
+          cp android/android/app/build/outputs/apk/release/app-release.apk \
             speech2prompt-${VERSION}.apk
 
       - name: Upload Android artifact
