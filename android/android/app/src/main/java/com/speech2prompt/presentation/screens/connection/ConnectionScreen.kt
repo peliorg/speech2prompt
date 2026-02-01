@@ -211,8 +211,11 @@ private fun ConnectionContent(
             return
         }
         
-        // Connection Status
-        if (connectionState != BtConnectionState.DISCONNECTED && connectionState != BtConnectionState.FAILED) {
+        // Connection Status (only show during active connection states)
+        if (connectionState == BtConnectionState.CONNECTING || 
+            connectionState == BtConnectionState.PAIRING ||
+            connectionState == BtConnectionState.RECONNECTING ||
+            connectionState == BtConnectionState.CONNECTED) {
             ConnectionStatusSection(
                 connectionState = connectionState,
                 connectedDevice = connectedDevice,

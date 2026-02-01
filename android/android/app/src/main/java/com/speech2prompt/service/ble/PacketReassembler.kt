@@ -20,6 +20,7 @@ class PacketReassembler {
     
     companion object {
         private const val TAG = "PacketReassembler"
+        private const val REASSEMBLY_TIMEOUT_MS = 2000L // 2 seconds max for reassembly
     }
     
     private val lock = Any()
@@ -27,6 +28,7 @@ class PacketReassembler {
     private var expectedLength = 0
     private var expectedSeq = 0
     private var inProgress = false
+    private var reassemblyStartTime = 0L
     
     /**
      * Check if reassembly is currently in progress.
@@ -54,6 +56,15 @@ class PacketReassembler {
      * @return Complete message bytes if this packet completes a message, null otherwise
      */
     fun addPacket(packet: ByteArray): ByteArray? = synchronized(lock) {
+        // Check for stalled reassembly (timeout protection)
+        if (inProgress) {
+            val elapsed = System.currentTimeMillis() - reassemblyStartTime
+            if (elapsed > REASSEMBLY_TIMEOUT_MS) {
+                Log.w(TAG, "Reassembly timeout (${elapsed}ms) - had ${buffer.size}/$expectedLength bytes, resetting")
+                resetInternal()
+            }
+        }
+        
         if (packet.size < 2) {
             Log.w(TAG, "Packet too short (${packet.size} bytes)")
             return null
@@ -86,6 +97,7 @@ class PacketReassembler {
             buffer.clear()
             expectedSeq = 0
             inProgress = true
+            reassemblyStartTime = System.currentTimeMillis()
             
             // Payload starts at byte 4 for first packet
             for (i in BleConstants.HEADER_SIZE_FIRST until packet.size) {
@@ -126,7 +138,8 @@ class PacketReassembler {
             inProgress = false
             
             if (buffer.size == expectedLength) {
-                Log.d(TAG, "Message complete ($expectedLength bytes)")
+                val elapsed = System.currentTimeMillis() - reassemblyStartTime
+                Log.d(TAG, "Message complete ($expectedLength bytes in ${elapsed}ms)")
                 val result = buffer.toByteArray()
                 buffer.clear()
                 return result
@@ -182,5 +195,6 @@ class PacketReassembler {
         expectedLength = 0
         expectedSeq = 0
         inProgress = false
+        reassemblyStartTime = 0L
     }
 }

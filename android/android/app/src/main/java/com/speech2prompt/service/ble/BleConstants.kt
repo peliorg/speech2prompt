@@ -47,7 +47,7 @@ object BleConstants {
     val CONNECTION_TIMEOUT: Duration = 15.seconds
     
     /** ACK timeout */
-    val ACK_TIMEOUT: Duration = 10.seconds
+    val ACK_TIMEOUT: Duration = 3.seconds
     
     /** Heartbeat interval */
     val HEARTBEAT_INTERVAL: Duration = 5.seconds

@@ -459,10 +459,16 @@ class HomeViewModel @Inject constructor(
         // Add trailing space so words don't run together on receiver
         val textWithSpace = if (text.endsWith(" ")) text else "$text "
         val message = Message.text(textWithSpace)
-        val success = bleManager.sendMessage(message)
         
+        // Retry once on failure (handles transient BLE errors)
+        var success = bleManager.sendMessage(message)
         if (!success) {
-            Log.w(TAG, "Failed to send partial text: $text")
+            Log.w(TAG, "Failed to send partial text: $text, retrying...")
+            delay(100) // Brief delay before retry
+            success = bleManager.sendMessage(message)
+            if (!success) {
+                Log.e(TAG, "Failed to send partial text after retry: $text")
+            }
         }
     }
     

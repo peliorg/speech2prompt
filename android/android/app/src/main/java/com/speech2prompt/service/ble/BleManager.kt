@@ -48,6 +48,10 @@ class BleManager @Inject constructor(
     private var linuxDeviceId: String? = null
     private var ecdhKeyPair: KeyPair? = null
     
+    // Message sending throttle
+    private var lastSendTime = 0L
+    private val minSendInterval = 50L // Minimum 50ms between sends
+    
     // State flows
     val connectionState: StateFlow<BtConnectionState> = connection.connectionState
     val scannedDevices: StateFlow<List<BleDeviceInfo>> = scanner.scannedDevices
@@ -142,6 +146,19 @@ class BleManager @Inject constructor(
             Log.d(TAG, "Cannot send ${message.messageType} in state ${connectionState.value}, queueing message")
             pendingMessages.add(message)
             return false
+        }
+        
+        // Throttle to prevent sending too quickly (skip for ACK and HEARTBEAT)
+        if (message.messageType != MessageType.ACK && 
+            message.messageType != MessageType.HEARTBEAT) {
+            val now = System.currentTimeMillis()
+            val timeSinceLastSend = now - lastSendTime
+            if (timeSinceLastSend < minSendInterval) {
+                val delayNeeded = minSendInterval - timeSinceLastSend
+                Log.d(TAG, "Throttling: waiting ${delayNeeded}ms before send")
+                kotlinx.coroutines.delay(delayNeeded)
+            }
+            lastSendTime = System.currentTimeMillis()
         }
         
         val gatt = connection.getGatt()
@@ -459,7 +476,7 @@ class BleManager @Inject constructor(
                 deferred.await()
             }
         } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "ACK timeout for $timestamp")
+            Log.w(TAG, "ACK timeout for $timestamp (${BleConstants.ACK_TIMEOUT.inWholeMilliseconds}ms) - message may have been lost or desktop failed to send ACK")
             ackWaiters.remove(timestamp)
             false
         }
