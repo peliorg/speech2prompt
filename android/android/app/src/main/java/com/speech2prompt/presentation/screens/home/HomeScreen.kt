@@ -142,7 +142,8 @@ fun HomeScreen(
                     uiState = uiState,
                     onToggleListening = viewModel::toggleListening,
                     onNavigateToConnection = onNavigateToConnection,
-                    onClearError = viewModel::clearError
+                    onClearError = viewModel::clearError,
+                    onDisconnect = viewModel::disconnect
                 )
             }
         }
@@ -154,7 +155,8 @@ private fun HomeContent(
     uiState: HomeUiState,
     onToggleListening: () -> Unit,
     onNavigateToConnection: () -> Unit,
-    onClearError: () -> Unit
+    onClearError: () -> Unit,
+    onDisconnect: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -167,7 +169,8 @@ private fun HomeContent(
         ConnectionStatusCard(
             connectionState = uiState.connectionState,
             connectedDevice = uiState.connectedDevice,
-            onConnect = onNavigateToConnection
+            onConnect = onNavigateToConnection,
+            onDisconnect = onDisconnect
         )
         
         Spacer(Modifier.height(24.dp))
@@ -211,7 +214,8 @@ private fun HomeContent(
 private fun ConnectionStatusCard(
     connectionState: BtConnectionState,
     connectedDevice: com.speech2prompt.domain.model.BleDeviceInfo?,
-    onConnect: () -> Unit
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit = {}
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -260,7 +264,7 @@ private fun ConnectionStatusCard(
                 }
             }
             
-            // Connect Button
+            // Connect/Disconnect Button
             if (connectionState == BtConnectionState.DISCONNECTED || connectionState == BtConnectionState.FAILED) {
                 Button(
                     onClick = onConnect,
@@ -270,6 +274,17 @@ private fun ConnectionStatusCard(
                     )
                 ) {
                     Text("Connect")
+                }
+            } else if (connectionState == BtConnectionState.CONNECTED) {
+                Button(
+                    onClick = onDisconnect,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Disconnect")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Disconnect")
                 }
             }
         }

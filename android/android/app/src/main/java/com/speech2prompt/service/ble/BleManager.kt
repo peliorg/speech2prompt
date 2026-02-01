@@ -131,6 +131,7 @@ class BleManager @Inject constructor(
         _connectedDevice.value = null
         sharedSecret = null
         linuxDeviceId = null
+        ecdhKeyPair = null  // Clear any pending pairing state
     }
     
     /**
@@ -382,8 +383,14 @@ class BleManager @Inject constructor(
         if (success) {
             Log.d(TAG, "PAIR_REQ sent successfully, awaiting desktop confirmation")
         } else {
-            Log.e(TAG, "Failed to send PAIR_REQ")
-            ecdhKeyPair = null
+            // NOTE: Don't clear ecdhKeyPair here!
+            // ACK timeout can happen if desktop's notification session is broken,
+            // but desktop may still show the confirmation dialog and send PAIR_ACK.
+            // The keypair will be cleared when:
+            // - PAIR_ACK is received and handled (success or failure)
+            // - Connection is disconnected/reset
+            // - A new pairing request is initiated
+            Log.w(TAG, "PAIR_REQ ACK timeout - desktop may still show confirmation dialog")
         }
         // No PIN dialog - desktop will show yes/no confirmation
     }

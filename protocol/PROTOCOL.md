@@ -1,5 +1,14 @@
 # Speech2Prompt Communication Protocol
 
+> **⚠️ OUTDATED DOCUMENTATION**  
+> This document describes an older RFCOMM-based protocol that is **NOT** implemented in the current codebase.
+> 
+> **Current Implementation**: The actual protocol uses **BLE GATT** (Bluetooth Low Energy Generic Attribute Profile) with ECDH key exchange.
+> - See `desktop/src/bluetooth/gatt_server.rs` for the server implementation
+> - See `android/.../service/ble/BleManager.kt` for the client implementation
+> - Protocol uses BLE GATT characteristics for message exchange, not RFCOMM
+> - Pairing uses ECDH key exchange, not PIN-based PBKDF2
+
 ## Overview
 
 This document defines the communication protocol between the Speech2Prompt Android app and Linux desktop app over Bluetooth RFCOMM (Serial Port Profile).
