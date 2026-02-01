@@ -8,10 +8,12 @@ import com.speech2prompt.service.ble.BleManager
 import com.speech2prompt.service.speech.SpeechRecognitionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
@@ -253,7 +255,13 @@ class HomeViewModel @Inject constructor(
                 if (currentNewText.trim() != lastActuallySentText.trim() && 
                     !sentSegments.contains(currentNewText.trim())) {
                     Log.d(TAG, "Sending partial: '$currentNewText' (lastSent='$lastSentText')")
-                    sendPartialText(currentNewText)
+                    
+                    // Use NonCancellable context to ensure send completes even if parent job is cancelled
+                    // This prevents race conditions where rapid partial results cancel in-flight sends
+                    withContext(NonCancellable) {
+                        sendPartialText(currentNewText)
+                    }
+                    
                     lastActuallySentText = currentNewText
                     sentSegments.add(currentNewText.trim())
                     lastSentText = text
