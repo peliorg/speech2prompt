@@ -97,7 +97,7 @@ impl EventProcessor {
                 info!("Text injection successful");
             }
         } else {
-            info!("Input disabled, ignoring text: {}", text);
+            debug!("Input disabled, ignoring text: {}", text);
         }
 
         Ok(())

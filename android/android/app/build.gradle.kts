@@ -48,8 +48,6 @@ android {
     buildTypes {
         debug {
             isMinifyEnabled = false
-            buildConfigField("String", "OPENAI_BASE_URL", "\"https://api.openai.com/v1/\"")
-            buildConfigField("String", "ANTHROPIC_BASE_URL", "\"https://api.anthropic.com/v1/\"")
         }
         release {
             signingConfig = if (keystorePropertiesFile.exists()) {
@@ -63,8 +61,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField("String", "OPENAI_BASE_URL", "\"https://api.openai.com/v1/\"")
-            buildConfigField("String", "ANTHROPIC_BASE_URL", "\"https://api.anthropic.com/v1/\"")
         }
     }
 

@@ -15,7 +15,7 @@
 //! X11 text injection using enigo.
 
 use anyhow::Result;
-use enigo::{Enigo, KeyboardControllable};
+use enigo::{Direction, Enigo, Keyboard, Settings};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
@@ -36,7 +36,7 @@ pub struct X11Injector {
 impl X11Injector {
     /// Create a new X11 injector.
     pub fn new() -> Result<Self> {
-        let enigo = Enigo::new();
+        let enigo = Enigo::new(&Settings::default())?;
         Ok(Self {
             enigo: Mutex::new(enigo),
             delay: Duration::from_millis(KEYSTROKE_DELAY_MS),
@@ -68,7 +68,7 @@ impl InputInjector for X11Injector {
 
         for c in text.chars() {
             trace!("Typing char: {:?}", c);
-            enigo.key_sequence(&c.to_string());
+            enigo.text(&c.to_string())?;
             self.pause();
         }
 
@@ -82,7 +82,7 @@ impl InputInjector for X11Injector {
         let mut enigo = self.enigo.lock().unwrap();
         let enigo_key = key.to_enigo();
 
-        enigo.key_click(enigo_key);
+        enigo.key(enigo_key, Direction::Click)?;
         self.pause();
 
         Ok(())
@@ -96,19 +96,19 @@ impl InputInjector for X11Injector {
         // Press modifiers
         for modifier in modifiers {
             let enigo_key = modifier.to_enigo();
-            enigo.key_down(enigo_key);
+            enigo.key(enigo_key, Direction::Press)?;
             self.pause();
         }
 
         // Press and release the main key
         let enigo_key = key.to_enigo();
-        enigo.key_click(enigo_key);
+        enigo.key(enigo_key, Direction::Click)?;
         self.pause();
 
         // Release modifiers in reverse order
         for modifier in modifiers.iter().rev() {
             let enigo_key = modifier.to_enigo();
-            enigo.key_up(enigo_key);
+            enigo.key(enigo_key, Direction::Release)?;
             self.pause();
         }
 

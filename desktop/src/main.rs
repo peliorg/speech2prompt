@@ -28,7 +28,7 @@ use anyhow::Result;
 use gtk4::prelude::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use bluetooth::GattServer;
@@ -129,7 +129,7 @@ async fn main() -> Result<()> {
                     state_gatt.set_error();
                 }
                 bluetooth::ConnectionEvent::TextReceived(text) => {
-                    info!("BLE text received: {}", text);
+                    debug!("BLE text received: {}", text);
                     state_gatt.set_last_text(text.clone());
                 }
                 bluetooth::ConnectionEvent::PairRequested { device_id, device_name } => {
@@ -177,6 +177,8 @@ async fn main() -> Result<()> {
                     ui::TrayAction::ShowHistory => {
                         info!("History window requested");
                         // TODO: Open GTK window
+                        // Future feature: Display a GTK window showing voice command history
+                        // This will allow users to review their recent voice commands
                     }
                     ui::TrayAction::ShowSettings => {
                         info!("Settings requested");
