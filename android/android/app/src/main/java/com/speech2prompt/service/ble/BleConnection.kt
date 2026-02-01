@@ -64,6 +64,9 @@ class BleConnection @Inject constructor(
     private var reconnectJob: Job? = null
     private var reconnectAttempts = 0
     
+    // Flag to distinguish user-initiated disconnect from connection loss
+    private var userInitiatedDisconnect = false
+    
     // Callbacks
     var onServicesDiscovered: ((BluetoothGatt) -> Unit)? = null
     var onCharacteristicChanged: ((BluetoothGattCharacteristic, ByteArray) -> Unit)? = null
@@ -88,6 +91,7 @@ class BleConnection @Inject constructor(
         setState(BtConnectionState.CONNECTING)
         _error.value = null
         reconnectAttempts = 0
+        userInitiatedDisconnect = false  // Reset flag for new connection
         connectedDevice = device
         
         try {
@@ -115,10 +119,14 @@ class BleConnection @Inject constructor(
     
     /**
      * Disconnect from the current device.
+     * This is a user-initiated disconnect and will NOT auto-reconnect.
      */
     @SuppressLint("MissingPermission")
     fun disconnect() {
-        Log.d(TAG, "Disconnecting...")
+        Log.d(TAG, "User-initiated disconnect...")
+        
+        // Set flag to prevent auto-reconnect
+        userInitiatedDisconnect = true
         
         reconnectJob?.cancel()
         reconnectJob = null
@@ -202,22 +210,38 @@ class BleConnection @Inject constructor(
         }
         
         bluetoothGatt = null
+        connectedDevice = null
         setState(BtConnectionState.DISCONNECTED)
     }
     
     /**
      * Handle disconnection with reconnection logic.
+     * Only auto-reconnects on connection loss, NOT on user-initiated disconnect.
      */
     private fun handleDisconnection() {
         val device = connectedDevice
         val wasConnected = bluetoothGatt != null
+        val wasUserInitiated = userInitiatedDisconnect
+        
+        // Reset the flag for next connection
+        userInitiatedDisconnect = false
         
         onDisconnected?.invoke()
         
-        if (wasConnected && device != null && reconnectAttempts < BleConstants.MAX_RECONNECT_ATTEMPTS) {
+        // Only auto-reconnect if:
+        // 1. Was connected and has device info
+        // 2. NOT a user-initiated disconnect
+        // 3. Haven't exceeded max reconnect attempts
+        if (wasConnected && device != null && 
+            !wasUserInitiated && 
+            reconnectAttempts < BleConstants.MAX_RECONNECT_ATTEMPTS) {
+            Log.d(TAG, "Connection lost, attempting auto-reconnect...")
             setState(BtConnectionState.RECONNECTING)
             scheduleReconnect(device)
         } else {
+            if (wasUserInitiated) {
+                Log.d(TAG, "User-initiated disconnect, not auto-reconnecting")
+            }
             cleanup()
         }
     }

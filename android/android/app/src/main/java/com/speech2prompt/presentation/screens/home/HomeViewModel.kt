@@ -605,6 +605,18 @@ class HomeViewModel @Inject constructor(
         }
     }
     
+    // ==================== Connection Actions ====================
+    
+    /**
+     * Disconnect from the currently connected device
+     */
+    fun disconnect() {
+        viewModelScope.launch {
+            bleManager.disconnect()
+            _uiState.update { it.copy(connectionState = BtConnectionState.DISCONNECTED) }
+        }
+    }
+    
     // ==================== Navigation Actions ====================
     
     /**

@@ -60,14 +60,10 @@ fun ConnectionScreen(
         }
     )
     
-    // Auto-navigate back when connected
+    // Auto-navigate back when connected (immediately, don't show "Connected" on this screen)
     LaunchedEffect(connectionState) {
         if (connectionState == BtConnectionState.CONNECTED) {
-            // Give user a moment to see connection success
-            kotlinx.coroutines.delay(1000)
-            if (viewModel.connectionState.value == BtConnectionState.CONNECTED) {
-                onNavigateBack()
-            }
+            onNavigateBack()
         }
     }
     
@@ -140,7 +136,6 @@ fun ConnectionScreen(
                 bluetoothEnabled = bluetoothEnabled,
                 hasBluetoothPermissions = permissionState.allGranted,
                 onConnectDevice = viewModel::connectToDevice,
-                onDisconnect = viewModel::disconnect,
                 onStartScan = {
                     if (permissionState.allGranted) {
                         viewModel.startScan()
@@ -163,7 +158,6 @@ private fun ConnectionContent(
     bluetoothEnabled: Boolean,
     hasBluetoothPermissions: Boolean,
     onConnectDevice: (com.speech2prompt.domain.model.BleDeviceInfo) -> Unit,
-    onDisconnect: () -> Unit,
     onStartScan: () -> Unit,
     onRequestPermissions: () -> Unit
 ) {
@@ -211,15 +205,13 @@ private fun ConnectionContent(
             return
         }
         
-        // Connection Status (only show during active connection states)
+        // Connection Status (only show during active connection states, not when connected since we navigate away)
         if (connectionState == BtConnectionState.CONNECTING || 
             connectionState == BtConnectionState.PAIRING ||
-            connectionState == BtConnectionState.RECONNECTING ||
-            connectionState == BtConnectionState.CONNECTED) {
+            connectionState == BtConnectionState.RECONNECTING) {
             ConnectionStatusSection(
                 connectionState = connectionState,
-                connectedDevice = connectedDevice,
-                onDisconnect = onDisconnect
+                connectedDevice = connectedDevice
             )
             Spacer(Modifier.height(16.dp))
         }
@@ -262,10 +254,19 @@ private fun ConnectionContent(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 items(scannedDevices, key = { it.address }) { device ->
+                    // Determine if this specific device is currently being connected/paired
+                    // Animation should show during CONNECTING, PAIRING, AWAITING_PAIRING, and RECONNECTING states
+                    // but only for the device that is being connected
+                    val isThisDeviceConnecting = connectedDevice?.address == device.address &&
+                        (connectionState == BtConnectionState.CONNECTING ||
+                         connectionState == BtConnectionState.PAIRING ||
+                         connectionState == BtConnectionState.AWAITING_PAIRING ||
+                         connectionState == BtConnectionState.RECONNECTING)
+                    
                     DeviceListItem(
                         device = device,
                         onConnect = { onConnectDevice(device) },
-                        isConnecting = connectionState == BtConnectionState.CONNECTING
+                        isConnecting = isThisDeviceConnecting
                     )
                 }
             }
@@ -276,8 +277,7 @@ private fun ConnectionContent(
 @Composable
 private fun ConnectionStatusSection(
     connectionState: BtConnectionState,
-    connectedDevice: com.speech2prompt.domain.model.BleDeviceInfo?,
-    onDisconnect: () -> Unit
+    connectedDevice: com.speech2prompt.domain.model.BleDeviceInfo?
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -305,17 +305,6 @@ private fun ConnectionStatusSection(
                             style = MaterialTheme.typography.bodyMedium,
                             color = OnBackgroundMuted
                         )
-                    }
-                }
-                
-                if (connectionState == BtConnectionState.CONNECTED) {
-                    TextButton(
-                        onClick = onDisconnect,
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = Error
-                        )
-                    ) {
-                        Text("Disconnect")
                     }
                 }
             }

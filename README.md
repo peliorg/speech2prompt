@@ -38,15 +38,15 @@ speech2prompt-desktop
 
 1. Install the APK from releases
 2. Grant microphone and Bluetooth permissions
-3. Pair with your computer in Bluetooth settings
-4. Open Speech2Prompt and connect
+3. Open Speech2Prompt and scan for devices
+4. Select your computer and connect
 
 ### First-Time Pairing
 
-1. Start the desktop app
-2. Open the Android app and tap Connect
-3. Select your computer from the list
-4. Enter the same 6-digit PIN on both devices
+1. Start the desktop app (it will appear in system tray)
+2. Open the Android app and tap "Scan for Devices"
+3. Select your computer from the list and tap "Connect"
+4. Accept the connection on your desktop when prompted
 5. Start speaking!
 
 ## Voice Commands
@@ -64,8 +64,8 @@ speech2prompt-desktop
 
 ### Prerequisites
 
-- **Android**: Android Studio, JDK 17+, Android SDK (API 26+)
-- **Linux**: Rust 1.70+, GTK4 dev libraries, BlueZ
+- **Android**: Android Studio, JDK 17+, Android SDK (API 35 for target, API 26+ minimum)
+- **Linux**: Rust 1.70+, GTK4 dev libraries, BlueZ 5.50+
 
 ### Build
 
@@ -83,7 +83,7 @@ cargo build --release
 ## System Requirements
 
 ### Android
-- Android 5.0 (API 21) or higher
+- Android 8.0 (API 26) or higher
 - Bluetooth Low Energy (BLE) support
 - Microphone
 
@@ -99,11 +99,11 @@ Desktop config: `~/.config/speech2prompt/config.toml`
 ```toml
 [bluetooth]
 device_name = "Speech2Prompt"
-auto_accept = true
+auto_accept = true  # Auto-accept reconnections from previously paired devices
 
 [input]
-typing_delay_ms = 10
-prefer_backend = "auto"
+typing_delay_ms = 10  # Delay between keystrokes
+prefer_backend = "auto"  # Options: "auto", "x11", "wayland"
 
 [history]
 enabled = true

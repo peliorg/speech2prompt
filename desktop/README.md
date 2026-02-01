@@ -117,14 +117,14 @@ Download pre-built packages from the [Releases page](https://github.com/peliorg/
 
 ```bash
 # Debian/Ubuntu (.deb)
-sudo dpkg -i speech2prompt-desktop_0.4.0_amd64.deb
+sudo dpkg -i speech2prompt-desktop_0.4.1_amd64.deb
 
 # Fedora/RHEL (.rpm)
-sudo rpm -i speech2prompt-desktop-0.4.0.x86_64.rpm
+sudo rpm -i speech2prompt-desktop-0.4.1.x86_64.rpm
 
 # AppImage (universal)
-chmod +x Speech2Prompt-0.4.0-x86_64.AppImage
-./Speech2Prompt-0.4.0-x86_64.AppImage
+chmod +x Speech2Prompt-0.4.1-x86_64.AppImage
+./Speech2Prompt-0.4.1-x86_64.AppImage
 ```
 
 ## Configuration
@@ -178,11 +178,11 @@ The app runs in the system tray with the following options:
 
 ### Pairing
 
-When an Android device attempts to connect:
-1. A GTK dialog will appear with a 6-digit PIN
-2. Enter the same PIN on your Android device
-3. Click "Accept" to complete pairing
-4. Keys are securely stored for future connections
+When an Android device attempts to connect for the first time:
+1. A GTK dialog will appear asking to accept or reject the connection
+2. Click "Accept" to complete pairing
+3. The connection is secured via ECDH key exchange
+4. Keys are securely stored for automatic reconnection
 
 ## System Requirements
 
@@ -356,7 +356,7 @@ cargo generate-rpm
 ## Security
 
 - All communication encrypted with AES-256-GCM
-- ECDH key exchange for secure pairing
+- AES-256-GCM encryption with ECDH key exchange
 - Keys stored securely in user's home directory
 - No network communication (BLE only)
 - No telemetry or data collection
