@@ -19,7 +19,7 @@ use enigo::{Enigo, KeyboardControllable};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
-use tracing::{debug, trace};
+use tracing::{debug, info, trace};
 
 use super::keys::{Key, Modifier};
 use super::InputInjector;
@@ -62,55 +62,56 @@ impl InputInjector for X11Injector {
     }
 
     fn type_text(&self, text: &str) -> Result<()> {
-        debug!("Typing text: {} chars", text.len());
-        
+        info!("X11: Typing text: {} chars", text.len());
+
         let mut enigo = self.enigo.lock().unwrap();
-        
+
         for c in text.chars() {
             trace!("Typing char: {:?}", c);
             enigo.key_sequence(&c.to_string());
             self.pause();
         }
-        
+
+        info!("X11: Text typing complete");
         Ok(())
     }
 
     fn press_key(&self, key: Key) -> Result<()> {
         debug!("Pressing key: {:?}", key);
-        
+
         let mut enigo = self.enigo.lock().unwrap();
         let enigo_key = key.to_enigo();
-        
+
         enigo.key_click(enigo_key);
         self.pause();
-        
+
         Ok(())
     }
 
     fn key_combo(&self, modifiers: &[Modifier], key: Key) -> Result<()> {
         debug!("Key combo: {:?} + {:?}", modifiers, key);
-        
+
         let mut enigo = self.enigo.lock().unwrap();
-        
+
         // Press modifiers
         for modifier in modifiers {
             let enigo_key = modifier.to_enigo();
             enigo.key_down(enigo_key);
             self.pause();
         }
-        
+
         // Press and release the main key
         let enigo_key = key.to_enigo();
         enigo.key_click(enigo_key);
         self.pause();
-        
+
         // Release modifiers in reverse order
         for modifier in modifiers.iter().rev() {
             let enigo_key = modifier.to_enigo();
             enigo.key_up(enigo_key);
             self.pause();
         }
-        
+
         Ok(())
     }
 }

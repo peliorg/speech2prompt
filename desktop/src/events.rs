@@ -81,7 +81,7 @@ impl EventProcessor {
 
     /// Handle received text.
     async fn handle_text(&mut self, text: &str) -> Result<()> {
-        debug!("Processing text: {}", text);
+        info!("Processing text: {} chars", text.len());
 
         // Log to history
         if let Err(e) = self.history.add_text(text) {
@@ -90,11 +90,14 @@ impl EventProcessor {
 
         // Inject text if enabled
         if self.input_enabled {
+            info!("Injecting text into active window: {} chars", text.len());
             if let Err(e) = self.injector.type_text(text) {
                 error!("Failed to inject text: {}", e);
+            } else {
+                info!("Text injection successful");
             }
         } else {
-            debug!("Input disabled, ignoring text");
+            info!("Input disabled, ignoring text: {}", text);
         }
 
         Ok(())

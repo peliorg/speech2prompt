@@ -111,6 +111,9 @@ async fn main() -> Result<()> {
         let mut processor_gatt = processor;
         
         while let Some(event) = gatt_event_rx_state.recv().await {
+            // Sync input_enabled state before processing each event
+            processor_gatt.set_input_enabled(state_gatt.is_input_enabled());
+            
             // Update state
             match &event {
                 bluetooth::ConnectionEvent::Connected { device_name } => {
