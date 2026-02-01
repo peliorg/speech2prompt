@@ -163,9 +163,13 @@ class BleConnection @Inject constructor(
      * Called when PAIR_ACK with success is received.
      */
     fun completePairing() {
-        if (_connectionState.value == BtConnectionState.AWAITING_PAIRING) {
+        val currentState = _connectionState.value
+        if (currentState == BtConnectionState.PAIRING || 
+            currentState == BtConnectionState.AWAITING_PAIRING) {
             Log.d(TAG, "Pairing complete, transitioning to CONNECTED")
             setState(BtConnectionState.CONNECTED)
+        } else {
+            Log.w(TAG, "completePairing called from unexpected state: $currentState")
         }
     }
     
@@ -174,9 +178,13 @@ class BleConnection @Inject constructor(
      * Called when PAIR_ACK with failure is received.
      */
     fun failPairing() {
-        if (_connectionState.value == BtConnectionState.AWAITING_PAIRING) {
+        val currentState = _connectionState.value
+        if (currentState == BtConnectionState.PAIRING || 
+            currentState == BtConnectionState.AWAITING_PAIRING) {
             Log.d(TAG, "Pairing failed, transitioning to FAILED")
             setState(BtConnectionState.FAILED)
+        } else {
+            Log.w(TAG, "failPairing called from unexpected state: $currentState")
         }
     }
     
@@ -302,7 +310,8 @@ class BleConnection @Inject constructor(
             }
             
             Log.d(TAG, "Found Speech2Prompt service")
-            setState(BtConnectionState.CONNECTED)
+            // Set to PAIRING state - will transition to CONNECTED when PAIR_ACK is received
+            setState(BtConnectionState.PAIRING)
             
             // Notify callback
             onServicesDiscovered?.invoke(gatt)

@@ -7,8 +7,9 @@ package com.speech2prompt.domain.model
 enum class BtConnectionState {
     DISCONNECTED,
     CONNECTING,
-    CONNECTED,
-    AWAITING_PAIRING,
+    PAIRING,          // Added: Device connected, waiting for pairing to complete
+    CONNECTED,        // Device fully connected AND paired
+    AWAITING_PAIRING, // Deprecated: use PAIRING instead (kept for compatibility)
     RECONNECTING,
     FAILED;
 
@@ -35,6 +36,7 @@ val BtConnectionState.isConnected: Boolean
 val BtConnectionState.isConnecting: Boolean
     get() = this == BtConnectionState.CONNECTING ||
             this == BtConnectionState.RECONNECTING ||
+            this == BtConnectionState.PAIRING ||
             this == BtConnectionState.AWAITING_PAIRING
 
 /**
@@ -51,6 +53,7 @@ val BtConnectionState.displayText: String
     get() = when (this) {
         BtConnectionState.DISCONNECTED -> "Disconnected"
         BtConnectionState.CONNECTING -> "Connecting..."
+        BtConnectionState.PAIRING -> "Pairing..."
         BtConnectionState.CONNECTED -> "Connected"
         BtConnectionState.AWAITING_PAIRING -> "Awaiting Pairing..."
         BtConnectionState.RECONNECTING -> "Reconnecting..."
@@ -64,6 +67,7 @@ val BtConnectionState.iconName: String
     get() = when (this) {
         BtConnectionState.DISCONNECTED -> "bluetooth_disabled"
         BtConnectionState.CONNECTING -> "bluetooth_searching"
+        BtConnectionState.PAIRING -> "bluetooth_searching"
         BtConnectionState.CONNECTED -> "bluetooth_connected"
         BtConnectionState.AWAITING_PAIRING -> "bluetooth_searching"
         BtConnectionState.RECONNECTING -> "bluetooth_searching"

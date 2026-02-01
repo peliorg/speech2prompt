@@ -316,26 +316,40 @@ class HomeViewModel @Inject constructor(
     /**
      * Filter out any segments from text that were already sent.
      * This handles cases where the recognizer reorders or includes previously sent text.
+     * 
+     * IMPORTANT: This function should NOT filter out repeated words.
+     * Example: "hello hello" - first "hello" sent as partial, final should send second "hello"
+     * 
+     * Strategy:
+     * - Only filter if the text STARTS with a sent segment AND has additional text after it
+     * - If text exactly matches a sent segment (no extra text), DON'T filter it
+     *   (it's a repeated word, not a duplicate send)
      */
     private fun filterAlreadySentSegments(text: String): String {
         if (text.isBlank() || sentSegments.isEmpty()) return text
         
-        var result = text.trim()
+        val trimmed = text.trim()
         
-        // Check if the entire text was already sent
-        if (sentSegments.contains(result)) {
-            return ""
-        }
-        
-        // Check if any sent segment is contained in the new text
-        // Remove it if found at the beginning (most common case)
+        // Check if text starts with any sent segment
         for (segment in sentSegments) {
-            if (result.startsWith(segment)) {
-                result = result.substring(segment.length).trimStart()
+            if (trimmed.startsWith(segment)) {
+                // Check if there's additional text after the segment
+                val remaining = trimmed.substring(segment.length).trim()
+                
+                if (remaining.isNotEmpty()) {
+                    // There's more text after the segment, so remove the segment prefix
+                    return remaining
+                } else {
+                    // Text exactly matches the segment with no additional content
+                    // This is likely a repeated word (e.g., second "hello" in "hello hello")
+                    // DON'T filter it out - return it as-is
+                    return trimmed
+                }
             }
         }
         
-        return result
+        // No matching segments found, return original
+        return trimmed
     }
     
     /**
