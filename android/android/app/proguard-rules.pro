@@ -1,26 +1,33 @@
-# Flutter
--keep class io.flutter.app.** { *; }
--keep class io.flutter.plugin.** { *; }
--keep class io.flutter.util.** { *; }
--keep class io.flutter.view.** { *; }
--keep class io.flutter.** { *; }
--keep class io.flutter.plugins.** { *; }
+# Jetpack Compose - keep all composables
+-keep class androidx.compose.** { *; }
+-dontwarn androidx.compose.**
 
-# Bluetooth Serial (legacy)
--keep class com.github.nickspo.flutter_bluetooth_serial.** { *; }
+# Hilt dependency injection
+-keep class dagger.hilt.** { *; }
+-keep class * extends dagger.hilt.android.internal.managers.ViewComponentManager$FragmentContextWrapper { *; }
+-dontwarn dagger.hilt.**
 
-# Flutter Blue Plus
--keep class com.lib.flutter_blue_plus.* { *; }
+# Kotlin serialization
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.** 
+-keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
+-keepclasseswithmembers class kotlinx.serialization.json.** { kotlinx.serialization.KSerializer serializer(...); }
+-keep,includedescriptorclasses class com.speech2prompt.**$$serializer { *; }
+-keepclassmembers class com.speech2prompt.** { *** Companion; }
+-keepclasseswithmembers class com.speech2prompt.** { kotlinx.serialization.KSerializer serializer(...); }
 
-# Speech to Text
--keep class com.csdcorp.speech_to_text.** { *; }
+# OkHttp / Retrofit
+-dontwarn okhttp3.**
+-dontwarn okio.**
 
-# Secure Storage
--keep class com.it_nomads.fluttersecurestorage.** { *; }
-
-# Crypto libraries
+# Crypto libraries (Tink, BouncyCastle)
 -keep class org.bouncycastle.** { *; }
 -dontwarn org.bouncycastle.**
+-keep class com.google.crypto.tink.** { *; }
+-dontwarn com.google.crypto.tink.**
+
+# Google Error Prone annotations (compile-time only, not needed at runtime)
+-dontwarn com.google.errorprone.annotations.**
 
 # Play Core (deferred components - not used)
 -dontwarn com.google.android.play.core.**
