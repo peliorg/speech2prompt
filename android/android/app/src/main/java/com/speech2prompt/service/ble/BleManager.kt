@@ -133,8 +133,13 @@ class BleManager @Inject constructor(
      * Send a message to the connected device.
      */
     suspend fun sendMessage(message: Message): Boolean {
-        if (connectionState.value != BtConnectionState.CONNECTED) {
-            Log.d(TAG, "Not connected, queueing message")
+        // Allow PAIR_REQ to be sent during PAIRING state
+        val canSend = connectionState.value == BtConnectionState.CONNECTED ||
+                     (connectionState.value == BtConnectionState.PAIRING && 
+                      message.messageType == MessageType.PAIR_REQ)
+        
+        if (!canSend) {
+            Log.d(TAG, "Cannot send ${message.messageType} in state ${connectionState.value}, queueing message")
             pendingMessages.add(message)
             return false
         }
@@ -328,6 +333,7 @@ class BleManager @Inject constructor(
     
     private suspend fun sendPairingRequest() {
         val myDeviceId = getOrCreateDeviceId()
+        Log.d(TAG, "Initiating ECDH pairing request from device: $myDeviceId")
         
         // Generate ECDH keypair
         val keypairResult = ecdhManager.generateKeyPair()
@@ -337,6 +343,7 @@ class BleManager @Inject constructor(
             return
         }
         ecdhKeyPair = keypairResult.getOrThrow()
+        Log.d(TAG, "ECDH keypair generated successfully")
         
         // Get public key as base64
         val publicKeyResult = ecdhManager.getPublicKeyBase64(ecdhKeyPair!!)
@@ -347,12 +354,18 @@ class BleManager @Inject constructor(
             return
         }
         val publicKey = publicKeyResult.getOrThrow()
+        Log.d(TAG, "Public key extracted (${publicKey.length} chars)")
         
         val payload = PairRequestPayload.create(myDeviceId, "Android Device", publicKey)
         val message = Message.pairRequest(payload)
+        
+        Log.d(TAG, "Sending PAIR_REQ message (state: ${connectionState.value})")
         val success = sendMessage(message)
         
-        if (!success) {
+        if (success) {
+            Log.d(TAG, "PAIR_REQ sent successfully, awaiting desktop confirmation")
+        } else {
+            Log.e(TAG, "Failed to send PAIR_REQ")
             ecdhKeyPair = null
         }
         // No PIN dialog - desktop will show yes/no confirmation

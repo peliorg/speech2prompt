@@ -417,6 +417,8 @@ impl GattServer {
             // Handle message based on type
             match message.message_type {
                 MessageType::PairReq => {
+                    info!("📱 PAIR_REQ message received!");
+                    
                     // Handle pairing request
                     let payload = match PairRequestPayload::from_json(&message.payload) {
                         Ok(p) => p,
@@ -426,18 +428,21 @@ impl GattServer {
                         }
                     };
 
-                    info!("Pairing request from device: {} ({})", 
+                    info!("🔐 Pairing request from device: {} ({})", 
                           payload.device_name.as_deref().unwrap_or("Unknown"),
                           payload.device_id);
+                    info!("🔑 Android public key length: {} bytes", payload.public_key.len());
 
                     // Validate public key is present
                     if payload.public_key.is_empty() {
-                        error!("PAIR_REQ missing public key");
+                        error!("❌ PAIR_REQ missing public key");
                         return Ok(());
                     }
 
                     // Generate desktop ECDH keypair
+                    info!("🔐 Generating desktop ECDH keypair...");
                     let desktop_keypair = EcdhKeypair::generate();
+                    info!("✅ Desktop ECDH keypair generated");
 
                     // Store pending pairing data
                     state_guard.device_id = Some(payload.device_id.clone());
@@ -450,16 +455,19 @@ impl GattServer {
                     });
 
                     // Emit pairing requested event with device name
+                    info!("📤 Sending PairRequested event to main loop...");
                     let _ = event_tx
                         .send(ConnectionEvent::PairRequested {
                             device_id: payload.device_id,
                             device_name: payload.device_name,
                         })
                         .await;
+                    info!("✅ PairRequested event sent");
 
                     // Send ACK immediately to prevent Android timeout
                     let ack = Message::ack(message.timestamp);
                     Self::send_response_internal(ack, &state_guard, response_tx.clone()).await;
+                    info!("✅ ACK sent to Android");
                 }
                 MessageType::Text => {
                     if state_guard.state != ConnectionState::Authenticated {

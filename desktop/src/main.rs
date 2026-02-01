@@ -133,12 +133,14 @@ async fn main() -> Result<()> {
                     state_gatt.set_last_text(text.clone());
                 }
                 bluetooth::ConnectionEvent::PairRequested { device_id, device_name } => {
-                    info!("BLE pairing requested by: {}", device_id);
+                    info!("📱 BLE pairing requested by: {}", device_id);
+                    info!("📤 Forwarding to main loop for confirmation dialog...");
                     // Send to main loop for confirmation dialog handling
                     let _ = pairing_tx.send(PairingRequest { 
                         device_id: device_id.clone(),
                         device_name: device_name.clone(),
                     }).await;
+                    info!("✅ Pairing request forwarded to main loop");
                 }
                 bluetooth::ConnectionEvent::CommandReceived(_) => {
                     // Will be processed below
@@ -187,10 +189,12 @@ async fn main() -> Result<()> {
             }
             Some(request) = pairing_rx.recv() => {
                 let display_name = request.device_name.unwrap_or_else(|| request.device_id.clone());
-                info!("Showing confirmation dialog for device: {}", display_name);
+                info!("🔔 Received pairing request in main loop for: {}", display_name);
+                info!("🪟 Showing confirmation dialog...");
                 
                 // Show confirmation dialog
                 let mut confirm_rx = ui::show_confirmation_dialog(&gtk_app, &display_name);
+                info!("✅ Confirmation dialog shown, waiting for user response...");
                 
                 // Process GTK events until dialog closes
                 let result = loop {
@@ -210,18 +214,23 @@ async fn main() -> Result<()> {
                 };
                 
                 // Handle result
+                info!("👤 User response received: {:?}", if matches!(result, ui::ConfirmationResult::Approved) { "APPROVED" } else { "REJECTED" });
                 let server = gatt_server.lock().await;
                 match result {
                     ui::ConfirmationResult::Approved => {
-                        info!("User approved pairing");
+                        info!("✅ User approved pairing, completing ECDH exchange...");
                         if let Err(e) = server.complete_pairing().await {
-                            error!("Pairing failed: {}", e);
+                            error!("❌ Pairing failed: {}", e);
+                        } else {
+                            info!("🎉 Pairing completed successfully!");
                         }
                     }
                     ui::ConfirmationResult::Rejected => {
-                        info!("User rejected pairing");
+                        info!("❌ User rejected pairing, sending rejection...");
                         if let Err(e) = server.reject_pairing("User rejected").await {
-                            error!("Failed to send rejection: {}", e);
+                            error!("❌ Failed to send rejection: {}", e);
+                        } else {
+                            info!("✅ Rejection sent to Android");
                         }
                     }
                 }

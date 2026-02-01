@@ -24,6 +24,10 @@ pub fn show_confirmation_dialog(
     app: &Application,
     device_name: &str,
 ) -> oneshot::Receiver<ConfirmationResult> {
+    info!(
+        "🪟 Creating confirmation dialog for device: {}",
+        device_name
+    );
     let (tx, rx) = oneshot::channel();
     let tx = Arc::new(std::sync::Mutex::new(Some(tx)));
 
@@ -35,6 +39,8 @@ pub fn show_confirmation_dialog(
         .modal(true)
         .resizable(false)
         .build();
+
+    info!("✅ Dialog window created");
 
     let main_box = GtkBox::new(Orientation::Vertical, 16);
     main_box.set_margin_top(24);
@@ -84,6 +90,7 @@ pub fn show_confirmation_dialog(
     let window_reject = window.clone();
     let tx_reject = tx.clone();
     reject_button.connect_clicked(move |_| {
+        info!("❌ User clicked 'No' button");
         if let Some(tx) = tx_reject.lock().unwrap().take() {
             let _ = tx.send(ConfirmationResult::Rejected);
         }
@@ -94,7 +101,7 @@ pub fn show_confirmation_dialog(
     let window_approve = window.clone();
     let tx_approve = tx.clone();
     approve_button.connect_clicked(move |_| {
-        info!("User approved pairing");
+        info!("✅ User clicked 'Yes' button - approving pairing");
         if let Some(tx) = tx_approve.lock().unwrap().take() {
             let _ = tx.send(ConfirmationResult::Approved);
         }
@@ -104,6 +111,7 @@ pub fn show_confirmation_dialog(
     // Window close handler (X button = reject)
     let tx_close = tx.clone();
     window.connect_close_request(move |_| {
+        info!("❌ User closed dialog window");
         if let Some(tx) = tx_close.lock().unwrap().take() {
             let _ = tx.send(ConfirmationResult::Rejected);
         }
@@ -114,14 +122,17 @@ pub fn show_confirmation_dialog(
     let window_timeout = window.clone();
     let tx_timeout = tx.clone();
     glib::timeout_add_seconds_local_once(60, move || {
+        info!("⏱️  Dialog timeout (60s) - auto-rejecting");
         if let Some(tx) = tx_timeout.lock().unwrap().take() {
             let _ = tx.send(ConfirmationResult::Rejected);
         }
         window_timeout.close();
     });
 
+    info!("📺 Presenting dialog window to user...");
     window.present();
     approve_button.grab_focus(); // Focus on Yes button for quick approval
+    info!("✅ Dialog is now visible and awaiting user input");
 
     rx
 }
