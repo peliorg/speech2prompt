@@ -53,12 +53,30 @@ speech2prompt-desktop
 
 | Say | Action |
 |-----|--------|
-| "new line" or "enter" | Press Enter |
+| "new line", "enter", "new paragraph" | Press Enter |
+| "go back", "backspace" | Press Backspace |
 | "select all" | Ctrl+A |
-| "copy that" | Ctrl+C |
-| "paste" | Ctrl+V |
-| "cut that" | Ctrl+X |
+| "copy", "copy that" | Ctrl+C |
+| "paste", "paste that" | Ctrl+V |
+| "cut", "cut that" | Ctrl+X |
 | "cancel" | Discard current text |
+
+### Custom Voice Commands
+
+You can customize voice command phrases by editing `~/.config/speech2prompt/voice_commands.json`:
+
+```json
+{
+  "ENTER": ["new line", "enter", "new paragraph"],
+  "BACKSPACE": ["go back", "backspace"],
+  "SELECT_ALL": ["select all"],
+  "COPY": ["copy", "copy that"],
+  "PASTE": ["paste", "paste that"],
+  "CUT": ["cut", "cut that"]
+}
+```
+
+The desktop app will reload custom phrases automatically when the file changes.
 
 ## Building from Source
 

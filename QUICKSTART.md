@@ -192,10 +192,8 @@ bluetoothctl devices
 1. In the Speech2Prompt app, tap the **Connect** button
 2. You should see your computer in the device list
 3. Tap your computer's name
-4. **Enter the PIN** when prompted:
-   - The desktop app will display a 6-digit PIN in the terminal
-   - Enter this same PIN on your phone
-   - Both devices must use the same PIN
+4. The desktop app will show a confirmation dialog - click **Accept**
+5. Pairing is automatic via secure ECDH key exchange (no PIN required)
 
 ### Start Dictating
 
@@ -213,16 +211,19 @@ Try these voice commands while dictating:
 
 | Say This | What Happens |
 |----------|-------------|
-| "new line" or "enter" | Inserts a new line (Enter key) |
+| "new line", "enter", or "new paragraph" | Inserts a new line (Enter key) |
+| "go back" or "backspace" | Deletes previous character (Backspace key) |
 | "select all" | Selects all text (Ctrl+A) |
-| "copy that" | Copies selected text (Ctrl+C) |
-| "paste" | Pastes clipboard (Ctrl+V) |
-| "cut that" | Cuts selected text (Ctrl+X) |
+| "copy" or "copy that" | Copies selected text (Ctrl+C) |
+| "paste" or "paste that" | Pastes clipboard (Ctrl+V) |
+| "cut" or "cut that" | Cuts selected text (Ctrl+X) |
 | "cancel" | Discards the current text buffer |
 
 You can also say:
 - "stop listening" - Stops speech recognition
 - "start listening" - Resumes speech recognition
+
+Voice commands can be customized in `~/.config/speech2prompt/voice_commands.json`.
 
 ## Troubleshooting
 

@@ -1,32 +1,51 @@
-# Speech2Prompt Communication Protocol
-
-> **⚠️ OUTDATED DOCUMENTATION**  
-> This document describes an older RFCOMM-based protocol that is **NOT** implemented in the current codebase.
-> 
-> **Current Implementation**: The actual protocol uses **BLE GATT** (Bluetooth Low Energy Generic Attribute Profile) with ECDH key exchange.
-> - See `desktop/src/bluetooth/gatt_server.rs` for the server implementation
-> - See `android/.../service/ble/BleManager.kt` for the client implementation
-> - Protocol uses BLE GATT characteristics for message exchange, not RFCOMM
-> - Pairing uses ECDH key exchange, not PIN-based PBKDF2
+# Speech2Prompt Communication Protocol v3
 
 ## Overview
 
-This document defines the communication protocol between the Speech2Prompt Android app and Linux desktop app over Bluetooth RFCOMM (Serial Port Profile).
+This document defines the communication protocol between the Speech2Prompt Android app and Linux desktop app over Bluetooth Low Energy (BLE) GATT.
 
 ## Transport Layer
 
-- **Protocol**: Bluetooth RFCOMM (SPP - Serial Port Profile)
-- **UUID**: `00001101-0000-1000-8000-00805F9B34FB` (standard SPP UUID)
-- **Framing**: Newline-delimited JSON messages (`\n` terminated)
+- **Protocol**: Bluetooth Low Energy (BLE) GATT
+- **Role**: Linux desktop acts as GATT server, Android acts as GATT client
+- **Service UUID**: `12345678-1234-5678-1234-56789abcdef0`
+- **Framing**: JSON messages with binary chunking for large payloads
 - **Encoding**: UTF-8
+
+### GATT Characteristics
+
+| Characteristic | UUID | Properties | Description |
+|----------------|------|------------|-------------|
+| Write | `12345678-1234-5678-1234-56789abcdef1` | Write | Client writes messages here |
+| Notify | `12345678-1234-5678-1234-56789abcdef2` | Notify | Server sends responses here |
+
+### Message Chunking
+
+BLE has limited MTU (typically 512 bytes). Large messages are chunked:
+
+**Chunk Header** (3 bytes):
+- Byte 0: Sequence number (0 = first chunk)
+- Byte 1-2: Total message length (big-endian u16)
+
+**Single Packet** (sequence = 0, length <= MTU - 3):
+```
+[0x00] [length_hi] [length_lo] [json_bytes...]
+```
+
+**Multi-Packet**:
+```
+Packet 1: [0x00] [total_len_hi] [total_len_lo] [json_part1...]
+Packet 2: [0x01] [payload_part2...]
+Packet N: [0xNN] [payload_partN...]
+```
 
 ## Message Structure
 
-All messages are JSON objects with the following fields:
+All messages are JSON objects:
 
 ```json
 {
-  "v": 1,
+  "v": 3,
   "t": "MESSAGE_TYPE",
   "p": "payload",
   "ts": 1234567890123,
@@ -38,29 +57,49 @@ All messages are JSON objects with the following fields:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `v` | integer | Yes | Protocol version (currently `1`) |
-| `t` | string | Yes | Message type (see below) |
-| `p` | string | Yes | Message payload |
+| `v` | integer | Yes | Protocol version (`3`) |
+| `t` | string | Yes | Message type |
+| `p` | string | Yes | Message payload (may be encrypted) |
 | `ts` | integer | Yes | Unix timestamp in milliseconds |
-| `cs` | string | Yes | Checksum for integrity verification |
+| `cs` | string | Yes | HMAC checksum for integrity |
 
 ### Checksum Calculation
 
 ```
-checksum = SHA256(v + t + p + ts + shared_secret).substring(0, 8)
+checksum = SHA256(v + t + p + ts + shared_secret).hex()[0:8]
 ```
-
-Where `+` is string concatenation and `shared_secret` is the encryption key established during pairing.
 
 ## Message Types
 
-### TEXT
+### WORD
 
-Plain text to be typed at the cursor position.
+Single word from speech recognition. Sent word-by-word for real-time command matching.
 
 ```json
 {
-  "v": 1,
+  "v": 3,
+  "t": "WORD",
+  "p": "{\"word\":\"hello\",\"session_id\":\"abc123\",\"seq\":5,\"is_final\":false}",
+  "ts": 1706745600000,
+  "cs": "a1b2c3d4"
+}
+```
+
+**Payload** (JSON string):
+- `word`: The recognized word
+- `session_id`: Recognition session identifier (changes when speech restarts)
+- `seq`: Sequence number within session
+- `is_final`: Whether this is the final result for the utterance
+
+**Receiver Action**: Buffer words, match voice commands, type text.
+
+### TEXT
+
+Complete text to type (legacy, still supported).
+
+```json
+{
+  "v": 3,
   "t": "TEXT",
   "p": "Hello, this is dictated text",
   "ts": 1706745600000,
@@ -72,11 +111,11 @@ Plain text to be typed at the cursor position.
 
 ### COMMAND
 
-Voice command to execute.
+Explicit voice command.
 
 ```json
 {
-  "v": 1,
+  "v": 3,
   "t": "COMMAND",
   "p": "ENTER",
   "ts": 1706745600000,
@@ -89,29 +128,12 @@ Voice command to execute.
 | Code | Action | Keyboard Equivalent |
 |------|--------|---------------------|
 | `ENTER` | Press Enter/Return | Enter |
+| `BACKSPACE` | Delete previous character | Backspace |
 | `SELECT_ALL` | Select all text | Ctrl+A |
 | `COPY` | Copy selection | Ctrl+C |
 | `PASTE` | Paste clipboard | Ctrl+V |
 | `CUT` | Cut selection | Ctrl+X |
 | `CANCEL` | Discard pending input | (no action) |
-
-### HEARTBEAT
-
-Keep-alive message sent periodically to maintain connection.
-
-```json
-{
-  "v": 1,
-  "t": "HEARTBEAT",
-  "p": "",
-  "ts": 1706745600000,
-  "cs": "i9j0k1l2"
-}
-```
-
-**Interval**: Every 5 seconds when connection is idle.
-
-**Timeout**: If no message received for 15 seconds, connection is considered lost.
 
 ### ACK
 
@@ -119,179 +141,180 @@ Acknowledgment of received message.
 
 ```json
 {
-  "v": 1,
+  "v": 3,
   "t": "ACK",
-  "p": "1706745600000",
+  "p": "{\"status\":\"ok\",\"ref_ts\":1706745600000}",
   "ts": 1706745600100,
   "cs": "m3n4o5p6"
 }
 ```
 
-**Payload**: Timestamp of the acknowledged message.
-
 ### PAIR_REQ
 
-Pairing request sent by Android to initiate secure session.
+Pairing request from Android with ECDH public key.
 
 ```json
 {
-  "v": 1,
+  "v": 3,
   "t": "PAIR_REQ",
-  "p": "{\"device_id\":\"android-xxx\",\"public_key\":\"base64...\"}",
+  "p": "{\"device_id\":\"android-xxx\",\"device_name\":\"Pixel 7\",\"public_key\":\"base64...\"}",
   "ts": 1706745600000,
   "cs": "q7r8s9t0"
 }
 ```
 
-**Payload** (JSON string):
-- `device_id`: Unique identifier for the Android device
-- `public_key`: Base64-encoded public key for key exchange
+**Payload**:
+- `device_id`: Unique Android device identifier
+- `device_name`: Human-readable device name
+- `public_key`: X25519 public key (base64, 44 chars)
 
 ### PAIR_ACK
 
-Pairing acknowledgment sent by Linux after successful pairing.
+Pairing response from Linux with ECDH public key.
 
 ```json
 {
-  "v": 1,
+  "v": 3,
   "t": "PAIR_ACK",
-  "p": "{\"device_id\":\"linux-xxx\",\"public_key\":\"base64...\",\"status\":\"ok\"}",
+  "p": "{\"device_id\":\"linux-xxx\",\"public_key\":\"base64...\",\"status\":\"ok\",\"protocol_version\":3}",
   "ts": 1706745600000,
   "cs": "u1v2w3x4"
 }
 ```
 
-**Payload** (JSON string):
-- `device_id`: Unique identifier for the Linux device
-- `public_key`: Base64-encoded public key for key exchange
+**Payload**:
+- `device_id`: Unique Linux device identifier
+- `public_key`: X25519 public key (base64, 44 chars)
 - `status`: `"ok"` or `"error"`
+- `protocol_version`: Supported protocol version
+- `error` (optional): Error message if status is "error"
 
 ## Encryption
 
-### Initial Pairing
+### Key Exchange (ECDH)
 
-1. User enters 6-digit PIN on both devices
-2. Both devices derive shared secret:
+1. Android generates X25519 keypair, sends public key in `PAIR_REQ`
+2. Linux generates X25519 keypair, computes shared secret
+3. Linux sends its public key in `PAIR_ACK`
+4. Android computes same shared secret
+5. Both derive encryption key:
    ```
-   shared_secret = PBKDF2(
-     password = PIN + android_device_id + linux_device_id,
+   key = PBKDF2(
+     password = hex(shared_secret) + android_device_id + linux_device_id,
      salt = "speech2prompt_v1",
      iterations = 100000,
      key_length = 32
    )
    ```
-3. Shared secret is stored securely on both devices
 
-### Message Encryption
+### Message Encryption (AES-256-GCM)
 
 After pairing, message payloads are encrypted:
 
-1. Generate random 12-byte IV for each message
-2. Encrypt payload with AES-256-GCM using shared secret
-3. Prepend IV to ciphertext
-4. Base64-encode the result
+1. Generate random 12-byte nonce
+2. Encrypt payload with AES-256-GCM
+3. Base64-encode: `base64(nonce || ciphertext || tag)`
 
-**Encrypted Message Format**:
+**Encrypted payload format**:
 ```json
 {
-  "v": 1,
-  "t": "TEXT",
-  "p": "base64(IV + AES-GCM(payload))",
+  "v": 3,
+  "t": "WORD",
+  "p": "base64(nonce + AES-GCM(actual_payload))",
   "ts": 1706745600000,
   "cs": "checksum_of_encrypted_payload"
 }
 ```
 
-### Decryption
-
-1. Base64-decode the payload
-2. Extract first 12 bytes as IV
-3. Decrypt remaining bytes with AES-256-GCM
-
 ## Connection Flow
 
-### Initial Connection
+### Initial Pairing
 
 ```
-Android                                   Linux
-   |                                        |
-   |  [Bluetooth RFCOMM Connect]            |
-   |--------------------------------------->|
-   |                                        |
-   |  PAIR_REQ (if not previously paired)   |
-   |--------------------------------------->|
-   |                                        |
-   |                          [User enters PIN]
-   |                                        |
-   |                              PAIR_ACK  |
-   |<---------------------------------------|
-   |                                        |
-   |  HEARTBEAT                             |
-   |--------------------------------------->|
-   |                                        |
-   |                              ACK       |
-   |<---------------------------------------|
-   |                                        |
-   [Connection established, ready for text] |
+Android (GATT Client)                    Linux (GATT Server)
+    |                                           |
+    |  [Discover service, connect]              |
+    |------------------------------------------>|
+    |                                           |
+    |  PAIR_REQ (device_id, public_key)         |
+    |  [Write to Write Characteristic]          |
+    |------------------------------------------>|
+    |                                           |
+    |                    [User accepts on Linux]|
+    |                                           |
+    |               PAIR_ACK (public_key, ok)   |
+    |               [Notify via Notify Char]    |
+    |<------------------------------------------|
+    |                                           |
+    [Both compute shared secret, derive key]    |
+    |                                           |
+    |  WORD/TEXT (encrypted)                    |
+    |------------------------------------------>|
+    |                           ACK             |
+    |<------------------------------------------|
 ```
 
-### Normal Operation
+### Reconnection (Previously Paired)
 
 ```
-Android                                   Linux
-   |                                        |
-   |  TEXT "Hello world"                    |
-   |--------------------------------------->|
-   |                              ACK       |
-   |<---------------------------------------|
-   |                         [Types text]   |
-   |                                        |
-   |  COMMAND "ENTER"                       |
-   |--------------------------------------->|
-   |                              ACK       |
-   |<---------------------------------------|
-   |                      [Presses Enter]   |
-   |                                        |
-   |  HEARTBEAT (every 5s when idle)        |
-   |--------------------------------------->|
-   |                              ACK       |
-   |<---------------------------------------|
+Android                                  Linux
+    |                                      |
+    |  [Connect to known device]           |
+    |------------------------------------->|
+    |                                      |
+    |  PAIR_REQ (same device_id)           |
+    |------------------------------------->|
+    |                                      |
+    |         PAIR_ACK (auto-accepted)     |
+    |<-------------------------------------|
+    |                                      |
+    [Resume with existing shared secret]   |
 ```
 
-### Reconnection
+## Voice Command Matching
 
-1. Android detects disconnection
-2. Wait 1 second
-3. Attempt reconnection (up to 5 retries with exponential backoff)
-4. If previously paired, skip PAIR_REQ/PAIR_ACK
-5. Resume with HEARTBEAT
+The desktop app matches words to commands using configurable phrases:
+
+**Default phrases** (`~/.config/speech2prompt/voice_commands.json`):
+```json
+{
+  "ENTER": ["new line", "enter", "new paragraph"],
+  "BACKSPACE": ["go back", "backspace"],
+  "SELECT_ALL": ["select all"],
+  "COPY": ["copy", "copy that"],
+  "PASTE": ["paste", "paste that"],
+  "CUT": ["cut", "cut that"]
+}
+```
+
+**Matching algorithm**:
+1. Buffer incoming words
+2. For single-word commands: immediate match
+3. For two-word commands: buffer first word, wait for second
+4. If second word doesn't match: flush first word as text
+5. Timeout (300ms): flush buffered words as text
 
 ## Error Handling
 
 ### Invalid Checksum
-
-If checksum verification fails:
-1. Log the error
-2. Do not process the message
-3. Do not send ACK
-4. Continue listening for valid messages
-
-### Unknown Message Type
-
-If message type is unrecognized:
-1. Log the warning
-2. Send ACK with error status (if protocol supports)
-3. Continue processing other messages
+- Log error, don't process message
+- Don't send ACK
+- Continue listening
 
 ### Decryption Failure
+- Log error
+- May indicate key mismatch
+- Request re-pairing if persistent
 
-If decryption fails:
-1. Log the error
-2. Request re-pairing (send PAIR_REQ)
-3. Or disconnect and notify user
+### Unknown Message Type
+- Log warning
+- Send ACK with error status
+- Continue processing
 
-## Version Compatibility
+## Version History
 
-- Receivers should accept messages with `v >= 1`
-- Unknown fields should be ignored (forward compatibility)
-- Unsupported message types should be logged and skipped
+| Version | Changes |
+|---------|---------|
+| 1 | Initial RFCOMM-based protocol (deprecated) |
+| 2 | BLE GATT transport, PIN-based pairing (deprecated) |
+| 3 | ECDH key exchange, WORD message type, chunked messages |
