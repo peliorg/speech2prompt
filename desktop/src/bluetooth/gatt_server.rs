@@ -195,7 +195,7 @@ impl GattServer {
                 write: Some(CharacteristicWrite {
                     write: true,
                     write_without_response: true,
-                method: CharacteristicWriteMethod::Fun(Box::new(move |data: Vec<u8>, _req: CharacteristicWriteRequest| {
+                method: CharacteristicWriteMethod::Fun(Box::new(move |data: Vec<u8>, req: CharacteristicWriteRequest| {
                     let state = state.clone();
                     let event_tx = event_tx.clone();
                     let linux_device_id = linux_device_id.clone();
@@ -204,6 +204,7 @@ impl GattServer {
                     Box::pin(async move {
                         Self::handle_command_write(
                             data,
+                            req,
                             state,
                             event_tx,
                             linux_device_id,
@@ -369,12 +370,21 @@ impl GattServer {
     /// Handle writes to Command RX characteristic.
     async fn handle_command_write(
         data: Vec<u8>,
+        req: CharacteristicWriteRequest,
         state: Arc<RwLock<ServerState>>,
         event_tx: mpsc::Sender<ConnectionEvent>,
         _linux_device_id: String,
         response_tx: Arc<Mutex<Option<mpsc::Sender<Vec<u8>>>>>,
     ) -> Result<(), bluer::gatt::local::ReqError> {
         let mut state_guard = state.write().await;
+        
+        // Update MTU if this write indicates a larger negotiated MTU
+        // The MTU in the write request is the effective ATT MTU negotiated with the client
+        let write_mtu = req.mtu as usize;
+        if write_mtu > state_guard.negotiated_mtu {
+            info!("MTU updated: {} -> {} bytes", state_guard.negotiated_mtu, write_mtu);
+            state_guard.negotiated_mtu = write_mtu;
+        }
 
         // Process packet through reassembler
         if let Some(complete_message) = state_guard.reassembler.process_packet(&data) {
