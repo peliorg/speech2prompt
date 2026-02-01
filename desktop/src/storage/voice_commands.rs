@@ -97,6 +97,7 @@ pub struct CommandInfo {
     /// Whether this is a custom phrase (true) or default (false).
     pub is_custom: bool,
     /// The default phrase for this command.
+    #[allow(dead_code)]
     pub default_phrase: String,
 }
 
@@ -112,6 +113,7 @@ pub struct VoiceCommandStore {
 
 impl VoiceCommandStore {
     /// Create a new store without file watching.
+    #[allow(dead_code)]
     pub fn new(config_dir: &Path) -> Result<Self> {
         let config_path = config_dir.join("voice_commands.json");
 
@@ -253,6 +255,7 @@ impl VoiceCommandStore {
     }
 
     /// Get the phrase for a command (custom or default).
+    #[allow(dead_code)]
     pub fn get_phrase(&self, command: &str) -> String {
         let command_upper = command.to_uppercase();
         let guard = self.mappings.read();
@@ -270,6 +273,7 @@ impl VoiceCommandStore {
     }
 
     /// Check if a command has a custom phrase.
+    #[allow(dead_code)]
     pub fn has_custom_phrase(&self, command: &str) -> bool {
         let command_upper = command.to_uppercase();
         self.mappings.read().contains_key(&command_upper)

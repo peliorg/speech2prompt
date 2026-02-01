@@ -193,17 +193,3 @@ pub fn run_tray(state: Arc<AppState>) -> Result<mpsc::UnboundedReceiver<TrayActi
 
     Ok(action_rx)
 }
-
-/// Handle for updating tray state.
-#[derive(Clone)]
-pub struct TrayHandle {
-    // ksni doesn't expose a direct update method, so we rely on
-    // periodic menu regeneration. For immediate updates, we'd need
-    // to use a different approach or fork ksni.
-}
-
-impl TrayHandle {
-    pub fn update(&self) {
-        // Tray will update on next menu access
-    }
-}

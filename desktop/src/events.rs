@@ -16,7 +16,6 @@
 
 use anyhow::Result;
 use std::sync::Arc;
-use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
 use crate::bluetooth::{CommandCode, ConnectionEvent};
@@ -73,11 +72,6 @@ impl EventProcessor {
     pub fn set_input_enabled(&mut self, enabled: bool) {
         self.input_enabled = enabled;
         info!("Input injection {}", if enabled { "enabled" } else { "disabled" });
-    }
-
-    /// Check if input injection is enabled.
-    pub fn is_input_enabled(&self) -> bool {
-        self.input_enabled
     }
 
     /// Process a single event.
@@ -353,18 +347,5 @@ impl EventProcessor {
         }
 
         Ok(())
-    }
-
-    /// Run the event processing loop.
-    pub async fn run(mut self, mut event_rx: mpsc::Receiver<ConnectionEvent>) {
-        info!("Event processor started");
-
-        while let Some(event) = event_rx.recv().await {
-            if let Err(e) = self.process_event(event).await {
-                error!("Error processing event: {}", e);
-            }
-        }
-
-        info!("Event processor stopped");
     }
 }

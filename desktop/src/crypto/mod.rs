@@ -39,11 +39,13 @@ pub struct CryptoContext {
 
 impl CryptoContext {
     /// Create a new crypto context from a shared secret.
+    #[allow(dead_code)]
     pub fn new(key: [u8; KEY_SIZE]) -> Self {
         Self { key }
     }
 
     /// Derive a crypto context from PIN and device IDs.
+    #[allow(dead_code)]
     pub fn from_pin(pin: &str, android_id: &str, linux_id: &str) -> Self {
         let key = derive_key(pin, android_id, linux_id);
         Self { key }
@@ -84,12 +86,14 @@ impl CryptoContext {
     }
 
     /// Get the raw key bytes.
+    #[allow(dead_code)]
     pub fn key(&self) -> &[u8; KEY_SIZE] {
         &self.key
     }
 }
 
 /// Derive a 256-bit key from PIN and device identifiers.
+#[allow(dead_code)]
 pub fn derive_key(pin: &str, android_id: &str, linux_id: &str) -> [u8; KEY_SIZE] {
     let password = format!("{}{}{}", pin, android_id, linux_id);
     let mut key = [0u8; KEY_SIZE];
@@ -180,6 +184,7 @@ pub fn checksum(
 }
 
 /// Generate a random device ID.
+#[allow(dead_code)]
 pub fn generate_device_id() -> String {
     let mut bytes = [0u8; 16];
     OsRng.fill_bytes(&mut bytes);

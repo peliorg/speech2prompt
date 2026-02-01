@@ -120,11 +120,13 @@ impl MessageReassembler {
     }
 
     /// Check if reassembly is in progress.
+    #[allow(dead_code)]
     pub fn is_in_progress(&self) -> bool {
         self.in_progress
     }
 
     /// Get current buffer size.
+    #[allow(dead_code)]
     pub fn buffer_size(&self) -> usize {
         self.buffer.len()
     }

@@ -21,12 +21,14 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionStatus {
     Disconnected,
+    #[allow(dead_code)]
     Connecting,
     Connected,
     Error,
 }
 
 impl ConnectionStatus {
+    #[allow(dead_code)]
     pub fn as_str(&self) -> &'static str {
         match self {
             ConnectionStatus::Disconnected => "Disconnected",
@@ -116,6 +118,7 @@ impl AppState {
         *self.last_text.write() = Some(text);
     }
 
+    #[allow(dead_code)]
     pub fn get_last_text(&self) -> Option<String> {
         self.last_text.read().clone()
     }

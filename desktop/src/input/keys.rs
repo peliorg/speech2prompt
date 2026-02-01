@@ -15,6 +15,7 @@
 //! Key and modifier definitions.
 
 /// Keyboard modifiers.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Modifier {
     Ctrl,
@@ -26,7 +27,7 @@ pub enum Modifier {
 impl Modifier {
     /// Get the enigo key for this modifier.
     #[cfg(feature = "x11")]
-    pub fn to_enigo(&self) -> enigo::Key {
+    pub fn to_enigo(self) -> enigo::Key {
         match self {
             Modifier::Ctrl => enigo::Key::Control,
             Modifier::Alt => enigo::Key::Alt,
@@ -36,7 +37,7 @@ impl Modifier {
     }
 
     /// Get the ydotool key name for this modifier.
-    pub fn to_ydotool(&self) -> &'static str {
+    pub fn to_ydotool(self) -> &'static str {
         match self {
             Modifier::Ctrl => "LEFTCTRL",
             Modifier::Alt => "LEFTALT",
@@ -47,6 +48,7 @@ impl Modifier {
 }
 
 /// Special keys.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
     // Letters
@@ -111,7 +113,7 @@ pub enum Key {
 impl Key {
     /// Get the enigo key.
     #[cfg(feature = "x11")]
-    pub fn to_enigo(&self) -> enigo::Key {
+    pub fn to_enigo(self) -> enigo::Key {
         use enigo::Key as EKey;
         match self {
             Key::A => EKey::Unicode('a'),
@@ -170,7 +172,7 @@ impl Key {
     }
 
     /// Get the ydotool key name.
-    pub fn to_ydotool(&self) -> &'static str {
+    pub fn to_ydotool(self) -> &'static str {
         match self {
             Key::A => "A",
             Key::B => "B",

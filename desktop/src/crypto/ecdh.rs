@@ -29,6 +29,7 @@ impl EcdhKeypair {
     }
 
     /// Get the public key as bytes.
+    #[allow(dead_code)]
     pub fn public_key_bytes(&self) -> [u8; PUBLIC_KEY_SIZE] {
         *self.public_key.as_bytes()
     }

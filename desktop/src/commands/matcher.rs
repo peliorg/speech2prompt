@@ -20,37 +20,6 @@ pub const DEFAULT_TWO_WORD_PHRASES: &[(&str, &str)] = &[
     ("go back", "BACKSPACE"),
 ];
 
-/// Trait for command matching (enables future fuzzy matching).
-///
-/// Note: Thread safety for concrete implementations is ensured through
-/// internal synchronization (e.g., RwLock in VoiceCommandStore).
-pub trait CommandMatcher {
-    /// Match a spoken phrase to a command.
-    fn match_phrase(&self, phrase: &str) -> Option<VoiceCommand>;
-}
-
-/// Exact match implementation using VoiceCommandStore.
-pub struct ExactMatcher {
-    store: Arc<VoiceCommandStore>,
-}
-
-impl ExactMatcher {
-    /// Create a new exact matcher.
-    pub fn new(store: Arc<VoiceCommandStore>) -> Self {
-        Self { store }
-    }
-}
-
-impl CommandMatcher for ExactMatcher {
-    fn match_phrase(&self, phrase: &str) -> Option<VoiceCommand> {
-        let command_code = self.store.match_phrase(phrase)?;
-
-        debug!("Matched phrase '{}' to command '{}'", phrase, command_code);
-
-        VoiceCommand::parse(&command_code)
-    }
-}
-
 /// Result of matching input text that may contain commands.
 #[derive(Debug, Clone)]
 pub enum MatchResult {
