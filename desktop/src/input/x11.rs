@@ -43,11 +43,6 @@ impl X11Injector {
         })
     }
 
-    /// Set the keystroke delay.
-    pub fn set_delay(&mut self, delay_ms: u64) {
-        self.delay = Duration::from_millis(delay_ms);
-    }
-
     /// Small delay between operations.
     fn pause(&self) {
         if !self.delay.is_zero() {

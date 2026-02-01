@@ -88,7 +88,7 @@ pub fn create_injector_with_preference(preference: &str) -> Result<Box<dyn Input
     let display_server = match preference.to_lowercase().as_str() {
         "x11" => DisplayServer::X11,
         "wayland" => DisplayServer::Wayland,
-        "auto" | _ => DisplayServer::detect(),
+        _ => DisplayServer::detect(),
     };
 
     info!("Display server: {:?}", display_server);

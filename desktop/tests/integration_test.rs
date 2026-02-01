@@ -1,18 +1,45 @@
-//! Integration tests for the full communication flow.
+//! Integration tests for the encryption flow.
 
-use speech2prompt_desktop::bluetooth::{Message, MessageType};
+use speech2prompt_desktop::crypto::ecdh::EcdhKeypair;
 use speech2prompt_desktop::crypto::CryptoContext;
 
 #[test]
-fn test_cross_platform_encryption() {
-    // Test that encryption/decryption works correctly
-    let pin = "123456";
+fn test_ecdh_key_exchange() {
+    // Simulate ECDH key exchange between Android and Linux
+    let android_keypair = EcdhKeypair::generate();
+    let linux_keypair = EcdhKeypair::generate();
+
+    // Get public keys before consuming keypairs
+    let android_public = android_keypair.public_key_bytes();
+    let linux_public = linux_keypair.public_key_bytes();
+
+    // Exchange public keys and compute shared secrets (consumes keypairs)
+    let android_shared = android_keypair.compute_shared_secret(&linux_public);
+    let linux_shared = linux_keypair.compute_shared_secret(&android_public);
+
+    // Both sides should derive the same shared secret
+    assert_eq!(android_shared, linux_shared);
+}
+
+#[test]
+fn test_ecdh_based_encryption() {
+    // Simulate full ECDH-based encryption flow
     let android_id = "android-test123";
     let linux_id = "linux-test456";
 
-    // Create contexts on both "sides"
-    let android_ctx = CryptoContext::from_pin(pin, android_id, linux_id);
-    let linux_ctx = CryptoContext::from_pin(pin, android_id, linux_id);
+    // Key exchange
+    let android_keypair = EcdhKeypair::generate();
+    let linux_keypair = EcdhKeypair::generate();
+
+    let android_public = android_keypair.public_key_bytes();
+    let linux_public = linux_keypair.public_key_bytes();
+
+    let android_shared = android_keypair.compute_shared_secret(&linux_public);
+    let linux_shared = linux_keypair.compute_shared_secret(&android_public);
+
+    // Create crypto contexts from ECDH shared secret
+    let android_ctx = CryptoContext::from_ecdh(&android_shared, android_id, linux_id);
+    let linux_ctx = CryptoContext::from_ecdh(&linux_shared, android_id, linux_id);
 
     // Encrypt on Android side
     let plaintext = "Hello from Android!";
@@ -25,58 +52,47 @@ fn test_cross_platform_encryption() {
 }
 
 #[test]
-fn test_message_flow() {
-    let pin = "123456";
+fn test_checksum_verification() {
+    // Test message integrity verification
     let android_id = "android-test123";
     let linux_id = "linux-test456";
 
-    let android_ctx = CryptoContext::from_pin(pin, android_id, linux_id);
-    let linux_ctx = CryptoContext::from_pin(pin, android_id, linux_id);
+    let android_keypair = EcdhKeypair::generate();
+    let linux_keypair = EcdhKeypair::generate();
 
-    // Create message on Android
-    let mut msg = Message::text("Test message");
-    msg.sign_and_encrypt(&android_ctx).unwrap();
+    let linux_public = linux_keypair.public_key_bytes();
+    let shared = android_keypair.compute_shared_secret(&linux_public);
 
-    // Serialize
-    let json = msg.to_json().unwrap();
+    let ctx = CryptoContext::from_ecdh(&shared, android_id, linux_id);
 
-    // Parse on Linux
-    let mut received = Message::from_json(&json).unwrap();
+    // Calculate checksum
+    let checksum = ctx.checksum(3, "WORD", "hello", 1234567890);
 
-    // Verify and decrypt
-    received.verify_and_decrypt(&linux_ctx).unwrap();
+    // Verify passes with correct data
+    assert!(ctx.verify_checksum(3, "WORD", "hello", 1234567890, &checksum));
 
-    assert_eq!(received.payload, "Test message");
+    // Verify fails with tampered data
+    assert!(!ctx.verify_checksum(3, "WORD", "tampered", 1234567890, &checksum));
+    assert!(!ctx.verify_checksum(3, "WORD", "hello", 1234567891, &checksum));
 }
 
 #[test]
-fn test_command_message() {
-    let ctx = CryptoContext::from_pin("123456", "android-1", "linux-1");
+fn test_device_id_binding() {
+    // Test that different device IDs produce different keys
+    // Generate keypairs for key exchange
+    let keypair1 = EcdhKeypair::generate();
+    let keypair2 = EcdhKeypair::generate();
+    let public2 = keypair2.public_key_bytes();
 
-    let mut msg = Message::command("ENTER");
-    msg.sign_and_encrypt(&ctx).unwrap();
+    // Compute shared secret
+    let shared = keypair1.compute_shared_secret(&public2);
 
-    let json = msg.to_json().unwrap();
-    let mut received = Message::from_json(&json).unwrap();
-    received.verify_and_decrypt(&ctx).unwrap();
+    // Use the same shared secret but different device IDs
+    // Same secret + different IDs = different derived keys
+    let ctx1 = CryptoContext::from_ecdh(&shared, "android-1", "linux-1");
+    let ctx2 = CryptoContext::from_ecdh(&shared, "android-2", "linux-2");
 
-    assert_eq!(received.message_type, MessageType::Command);
-    assert_eq!(received.payload, "ENTER");
-}
-
-#[test]
-fn test_checksum_verification() {
-    let ctx = CryptoContext::from_pin("123456", "android-1", "linux-1");
-
-    let mut msg = Message::text("Test");
-    msg.sign(&ctx);
-
-    // Verify passes
-    assert!(msg.verify(&ctx));
-
-    // Tamper with message
-    msg.payload = "Tampered".to_string();
-
-    // Verify fails
-    assert!(!msg.verify(&ctx));
+    // Encryption with one context cannot be decrypted by another (different device binding)
+    let encrypted = ctx1.encrypt("test").unwrap();
+    assert!(ctx2.decrypt(&encrypted).is_err());
 }

@@ -20,7 +20,6 @@ pub mod config;
 pub mod crypto;
 pub mod events;
 pub mod input;
-pub mod pairing;
 pub mod state;
 pub mod storage;
 pub mod ui;

@@ -16,6 +16,7 @@
 
 mod history;
 mod secure;
+mod voice_commands;
 
 pub use history::{EntryType, History, HistoryEntry};
-pub use secure::{PairedDevice, SecureStorage};
+pub use voice_commands::{CommandInfo, VoiceCommandStore};

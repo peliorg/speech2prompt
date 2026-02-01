@@ -27,6 +27,7 @@ use crate::state::{AppState, ConnectionStatus};
 pub enum TrayAction {
     ToggleInput,
     ShowHistory,
+    ManageCommands,
     ShowSettings,
     Quit,
 }
@@ -130,6 +131,15 @@ impl Tray for Speech2PromptTray {
             label: "View History...".to_string(),
             activate: Box::new(|tray: &mut Self| {
                 let _ = tray.action_tx.send(TrayAction::ShowHistory);
+            }),
+            ..Default::default()
+        }));
+
+        // Manage Commands
+        items.push(MenuItem::Standard(StandardItem {
+            label: "Manage Commands...".to_string(),
+            activate: Box::new(|tray: &mut Self| {
+                let _ = tray.action_tx.send(TrayAction::ManageCommands);
             }),
             ..Default::default()
         }));

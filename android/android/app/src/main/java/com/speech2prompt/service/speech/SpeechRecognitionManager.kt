@@ -76,6 +76,11 @@ class SpeechRecognitionManager @Inject constructor(
     @Volatile
     private var stopRequested = false
     
+    // Flag to indicate we're in the middle of an auto-restart
+    // This keeps the UI stable (isListening stays true) during seamless restarts
+    @Volatile
+    private var isAutoRestarting = false
+    
     // Watchdog
     private var watchdogJob: Job? = null
     private var lastSuccessfulListening: Long? = null
@@ -182,13 +187,17 @@ class SpeechRecognitionManager @Inject constructor(
     
     /**
      * Start listening for speech.
+     * @param isRestart true if this is an auto-restart (keeps UI stable)
      * @return true if started successfully, false if permission not granted
      */
-    suspend fun startListening(): Boolean {
-        Log.d(TAG, "startListening() called, current state: $recognizerState")
+    suspend fun startListening(isRestart: Boolean = false): Boolean {
+        Log.d(TAG, "startListening() called, current state: $recognizerState, isRestart: $isRestart")
         
-        // Clear the stop flag when explicitly starting
-        stopRequested = false
+        // Clear the stop flag when explicitly starting (not on auto-restart)
+        if (!isRestart) {
+            stopRequested = false
+            isAutoRestarting = false
+        }
         
         if (!_isInitialized.value) {
             Log.w(TAG, "Cannot start - not initialized")
@@ -239,6 +248,7 @@ class SpeechRecognitionManager @Inject constructor(
         
         // Set flag to prevent auto-restart from onResults/onError callbacks
         stopRequested = true
+        isAutoRestarting = false
         
         cancelScheduledRestart()
         
@@ -329,12 +339,25 @@ class SpeechRecognitionManager @Inject constructor(
         Log.d(TAG, "Setting locale: $localeId")
         _selectedLocale.value = localeId
         
-        // If currently listening, restart with new locale
+        // If currently listening, restart with new locale (seamless)
         if (_isListening.value) {
             serviceScope.launch {
-                stopListening()
+                isAutoRestarting = true  // Keep UI stable during locale change
+                stopRequested = false  // This is not a user-requested stop
+                
+                // Cancel current recognizer
+                withContext(Dispatchers.Main) {
+                    try {
+                        speechRecognizer?.stopListening()
+                        speechRecognizer?.cancel()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error stopping for locale change", e)
+                    }
+                }
+                transitionState(RecognizerState.IDLE)
+                
                 delay(100.milliseconds)
-                startListening()
+                startListening(isRestart = true)
             }
         }
     }
@@ -461,9 +484,11 @@ class SpeechRecognitionManager @Inject constructor(
             serviceScope.launch {
                 _recognizedText.emit(textContent)
             }
-        } else {
-            _currentText.value = ""
         }
+        // Note: We intentionally do NOT clear _currentText when there's no text.
+        // This prevents UI flickering when speech recognition auto-restarts.
+        // The currentText will be cleared when a new session starts or when
+        // the user explicitly stops listening.
     }
     
     private fun handleError(errorCode: Int) {
@@ -492,6 +517,12 @@ class SpeechRecognitionManager @Inject constructor(
     private fun scheduleRestart(wasSuccessful: Boolean, delay: Duration = Duration.ZERO) {
         if (_isPaused.value || !autoRestart || stopRequested) {
             Log.d(TAG, "Restart skipped: paused=${_isPaused.value}, autoRestart=$autoRestart, stopRequested=$stopRequested")
+            // If we're not restarting, clear the flag and update UI
+            if (isAutoRestarting) {
+                isAutoRestarting = false
+                updateListeningState(false)
+                _soundLevel.value = 0f
+            }
             return
         }
         
@@ -514,11 +545,19 @@ class SpeechRecognitionManager @Inject constructor(
             
             // Re-check stopRequested after delay in case stop was called during wait
             if (!_isPaused.value && autoRestart && !stopRequested) {
-                Log.d(TAG, "Auto-restarting recognition")
+                Log.d(TAG, "Auto-restarting recognition (seamless)")
                 transitionState(RecognizerState.IDLE)
-                startListening()
+                // Pass isRestart=true to indicate this is an auto-restart
+                // This keeps UI stable (isListening stays true)
+                startListening(isRestart = true)
             } else {
                 Log.d(TAG, "Restart cancelled: paused=${_isPaused.value}, autoRestart=$autoRestart, stopRequested=$stopRequested")
+                // Restart was cancelled, update UI state
+                if (isAutoRestarting) {
+                    isAutoRestarting = false
+                    updateListeningState(false)
+                    _soundLevel.value = 0f
+                }
             }
         }
     }
@@ -527,6 +566,11 @@ class SpeechRecognitionManager @Inject constructor(
         restartJob?.cancel()
         restartJob = null
         restartScheduled = false
+        // If we were in the middle of an auto-restart, clear that state
+        if (isAutoRestarting) {
+            isAutoRestarting = false
+            // Note: UI state (isListening) is updated by the caller (stopListening)
+        }
     }
     
     private fun startWatchdog() {
@@ -575,7 +619,18 @@ class SpeechRecognitionManager @Inject constructor(
         // Don't restart if stop was explicitly requested
         if (stopRequested) {
             Log.d(TAG, "Force restart skipped - stop was requested")
+            if (isAutoRestarting) {
+                isAutoRestarting = false
+                updateListeningState(false)
+                _soundLevel.value = 0f
+            }
             return
+        }
+        
+        // Set flag to keep UI stable during restart
+        val wasListening = _isListening.value
+        if (wasListening) {
+            isAutoRestarting = true
         }
         
         withContext(Dispatchers.Main) {
@@ -594,11 +649,20 @@ class SpeechRecognitionManager @Inject constructor(
                 // Restart if needed (and stop wasn't requested)
                 if (!_isPaused.value && autoRestart && !stopRequested) {
                     delay(500.milliseconds)
-                    startListening()
+                    startListening(isRestart = wasListening)
+                } else {
+                    // Not restarting, update UI
+                    if (isAutoRestarting) {
+                        isAutoRestarting = false
+                        updateListeningState(false)
+                        _soundLevel.value = 0f
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error during force restart", e)
                 _errorMessage.value = "Failed to restart: ${e.message}"
+                isAutoRestarting = false
+                updateListeningState(false)
             }
         }
     }
@@ -633,6 +697,8 @@ class SpeechRecognitionManager @Inject constructor(
             Log.d(TAG, "onReadyForSpeech")
             transitionState(RecognizerState.LISTENING)
             updateListeningState(true)
+            // Clear auto-restart flag now that we're successfully listening again
+            isAutoRestarting = false
             lastSuccessfulListening = System.currentTimeMillis()
             _errorMessage.value = null
         }
@@ -658,16 +724,51 @@ class SpeechRecognitionManager @Inject constructor(
         
         override fun onError(error: Int) {
             Log.w(TAG, "onError: $error")
+            
+            // Determine if we'll auto-restart BEFORE changing any state
+            val classification = errorHandler.classify(error)
+            val willAutoRestart = !stopRequested && !_isPaused.value && autoRestart && 
+                (classification.isTransient || consecutiveErrors < MAX_CONSECUTIVE_ERRORS)
+            
+            if (willAutoRestart) {
+                // Set flag to keep UI stable during restart
+                isAutoRestarting = true
+                Log.d(TAG, "Will auto-restart, keeping isListening=true for seamless UI")
+            }
+            
             transitionState(RecognizerState.IDLE)
-            updateListeningState(false)
-            _soundLevel.value = 0f
+            
+            // Only update UI listening state if we're NOT auto-restarting
+            // This prevents button flickering during seamless restarts
+            if (!willAutoRestart) {
+                updateListeningState(false)
+                _soundLevel.value = 0f
+            }
+            // Note: soundLevel may briefly show 0 during restart, but that's less jarring
+            // than the button changing. The visualizer will resume when listening restarts.
+            
             handleError(error)
         }
         
         override fun onResults(results: Bundle?) {
             Log.d(TAG, "onResults")
             handleResult(results, isFinal = true)
+            
+            // Determine if we'll auto-restart BEFORE changing any state
+            val willAutoRestart = !stopRequested && !_isPaused.value && autoRestart
+            
+            if (willAutoRestart) {
+                // Set flag to keep UI stable during restart
+                isAutoRestarting = true
+                Log.d(TAG, "Will auto-restart after results, keeping isListening=true")
+            }
+            
             transitionState(RecognizerState.IDLE)
+            
+            // Only update UI listening state if we're NOT auto-restarting
+            if (!willAutoRestart) {
+                updateListeningState(false)
+            }
             
             // Auto-restart for continuous listening
             scheduleRestart(wasSuccessful = true)

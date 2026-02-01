@@ -25,16 +25,17 @@ mod storage;
 mod ui;
 
 use anyhow::Result;
+use gtk4::glib;
 use gtk4::prelude::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use bluetooth::GattServer;
 use events::EventProcessor;
 use state::AppState;
-use storage::History;
+use storage::{History, VoiceCommandStore};
 
 /// Request to show confirmation dialog for pairing.
 #[derive(Debug, Clone)]
@@ -66,6 +67,19 @@ async fn main() -> Result<()> {
     // Initialize storage
     let history = Arc::new(History::new(&config.data_dir)?);
     info!("History storage initialized");
+
+    // Initialize voice command store with file watcher
+    let voice_command_store = match VoiceCommandStore::new_with_watcher(&config.data_dir) {
+        Ok(store) => {
+            let store = Arc::new(store);
+            info!("Voice command store initialized at {:?}", store.config_path());
+            Some(store)
+        }
+        Err(e) => {
+            warn!("Failed to initialize voice command store: {}. Voice commands will use defaults only.", e);
+            None
+        }
+    };
 
     // Initialize GTK (required for PIN dialog)
     gtk4::init().expect("Failed to initialize GTK");
@@ -101,7 +115,11 @@ async fn main() -> Result<()> {
     let (pairing_tx, mut pairing_rx) = tokio::sync::mpsc::channel::<PairingRequest>(8);
 
     // Create event processor
-    let processor = EventProcessor::new(injector, (*history).clone());
+    let processor = if let Some(store) = voice_command_store.clone() {
+        EventProcessor::with_voice_commands(injector, (*history).clone(), store, state.clone())
+    } else {
+        EventProcessor::new(injector, (*history).clone())
+    };
 
     // Handle BLE GATT events
     let state_gatt = state.clone();
@@ -110,46 +128,67 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         let mut processor_gatt = processor;
         
-        while let Some(event) = gatt_event_rx_state.recv().await {
-            // Sync input_enabled state before processing each event
-            processor_gatt.set_input_enabled(state_gatt.is_input_enabled());
-            
-            // Update state
-            match &event {
-                bluetooth::ConnectionEvent::Connected { device_name } => {
-                    info!("BLE device connected: {}", device_name);
-                    state_gatt.set_connected(device_name.clone());
+        // Periodic flush interval for look-ahead and stale word handling
+        let mut flush_interval = tokio::time::interval(tokio::time::Duration::from_millis(50));
+        
+        loop {
+            tokio::select! {
+                Some(event) = gatt_event_rx_state.recv() => {
+                    // Sync input_enabled state before processing each event
+                    processor_gatt.set_input_enabled(state_gatt.is_input_enabled());
+                    
+                    // Update state
+                    match &event {
+                        bluetooth::ConnectionEvent::Connected { device_name } => {
+                            info!("BLE device connected: {}", device_name);
+                            state_gatt.set_connected(device_name.clone());
+                        }
+                        bluetooth::ConnectionEvent::Disconnected => {
+                            info!("BLE device disconnected");
+                            state_gatt.set_disconnected();
+                        }
+                        bluetooth::ConnectionEvent::Error(e) => {
+                            error!("BLE error: {}", e);
+                            state_gatt.set_error();
+                        }
+                        bluetooth::ConnectionEvent::TextReceived(text) => {
+                            debug!("BLE text received: {}", text);
+                            state_gatt.set_last_text(text.clone());
+                        }
+                        bluetooth::ConnectionEvent::WordReceived { word, seq, session } => {
+                            debug!("BLE word received: '{}' seq={:?} session={}", word, seq, session);
+                            // Word processing is handled by event processor
+                        }
+                        bluetooth::ConnectionEvent::PairRequested { device_id, device_name } => {
+                            info!("📱 BLE pairing requested by: {}", device_id);
+                            info!("📤 Forwarding to main loop for confirmation dialog...");
+                            // Send to main loop for confirmation dialog handling
+                            let _ = pairing_tx.send(PairingRequest { 
+                                device_id: device_id.clone(),
+                                device_name: device_name.clone(),
+                            }).await;
+                            info!("✅ Pairing request forwarded to main loop");
+                        }
+                        bluetooth::ConnectionEvent::CommandReceived(_) => {
+                            // Will be processed below
+                        }
+                    }
+                    
+                    // Process event
+                    if let Err(e) = processor_gatt.process_event(event).await {
+                        error!("Error processing BLE event: {}", e);
+                    }
                 }
-                bluetooth::ConnectionEvent::Disconnected => {
-                    info!("BLE device disconnected");
-                    state_gatt.set_disconnected();
+                _ = flush_interval.tick() => {
+                    // Periodic flush of pending/stale words
+                    if let Err(e) = processor_gatt.process_periodic_flush().await {
+                        error!("Error during periodic flush: {}", e);
+                    }
                 }
-                bluetooth::ConnectionEvent::Error(e) => {
-                    error!("BLE error: {}", e);
-                    state_gatt.set_error();
+                else => {
+                    // Channel closed, exit the loop
+                    break;
                 }
-                bluetooth::ConnectionEvent::TextReceived(text) => {
-                    debug!("BLE text received: {}", text);
-                    state_gatt.set_last_text(text.clone());
-                }
-                bluetooth::ConnectionEvent::PairRequested { device_id, device_name } => {
-                    info!("📱 BLE pairing requested by: {}", device_id);
-                    info!("📤 Forwarding to main loop for confirmation dialog...");
-                    // Send to main loop for confirmation dialog handling
-                    let _ = pairing_tx.send(PairingRequest { 
-                        device_id: device_id.clone(),
-                        device_name: device_name.clone(),
-                    }).await;
-                    info!("✅ Pairing request forwarded to main loop");
-                }
-                bluetooth::ConnectionEvent::CommandReceived(_) => {
-                    // Will be processed below
-                }
-            }
-            
-            // Process event
-            if let Err(e) = processor_gatt.process_event(event).await {
-                error!("Error processing BLE event: {}", e);
             }
         }
     });
@@ -160,6 +199,9 @@ async fn main() -> Result<()> {
     info!("Ready. System tray active.");
 
     // Handle tray actions and pairing requests
+    // Use a short timeout to ensure GTK events are processed regularly
+    let gtk_poll_interval = tokio::time::Duration::from_millis(10);
+    
     loop {
         // Process any pending GTK events (non-blocking)
         while gtk4::glib::MainContext::default().pending() {
@@ -167,6 +209,8 @@ async fn main() -> Result<()> {
         }
         
         tokio::select! {
+            biased;  // Check channels first, then fall through to timeout
+            
             Some(action) = action_rx.recv() => {
                 match action {
                     ui::TrayAction::ToggleInput => {
@@ -179,6 +223,57 @@ async fn main() -> Result<()> {
                         // TODO: Open GTK window
                         // Future feature: Display a GTK window showing voice command history
                         // This will allow users to review their recent voice commands
+                    }
+                    ui::TrayAction::ManageCommands => {
+                        info!("Manage Commands window requested");
+                        // Window will be opened and events handled in the GTK main context
+                        // The manage_commands window has its own event handling via periodic refresh
+                        if let Some(store) = voice_command_store.clone() {
+                            let mut event_rx = ui::show_manage_commands_window(&gtk_app, store.clone(), state.clone());
+                            
+                            // Handle events from the manage commands window using GTK's event loop
+                            let state_cmds = state.clone();
+                            let store_cmds = store.clone();
+                            let gtk_app_cmds = gtk_app.clone();
+                            
+                            // Use glib::timeout to poll the channel from the GTK thread
+                            glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
+                                match event_rx.try_recv() {
+                                    Ok(event) => {
+                                        match event {
+                                            ui::ManageCommandsEvent::StartRecording(command) => {
+                                                info!("Starting recording for command: {}", command);
+                                                state_cmds.start_recording(command.clone());
+                                                // Show recording dialog immediately (we're on GTK thread)
+                                                ui::show_recording_dialog(&gtk_app_cmds, &command, state_cmds.clone());
+                                            }
+                                            ui::ManageCommandsEvent::CancelRecording => {
+                                                info!("Recording cancelled");
+                                                state_cmds.stop_recording();
+                                            }
+                                            ui::ManageCommandsEvent::RevertToDefault(command) => {
+                                                info!("Reverting command '{}' to default", command);
+                                                if let Err(e) = store_cmds.revert_to_default(&command) {
+                                                    error!("Failed to revert command: {}", e);
+                                                }
+                                            }
+                                        }
+                                        glib::ControlFlow::Continue
+                                    }
+                                    Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                                        // No event, keep polling
+                                        glib::ControlFlow::Continue
+                                    }
+                                    Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                                        // Channel closed (window closed)
+                                        info!("Manage Commands window closed");
+                                        glib::ControlFlow::Break
+                                    }
+                                }
+                            });
+                        } else {
+                            warn!("Voice command store not available");
+                        }
                     }
                     ui::TrayAction::ShowSettings => {
                         info!("Settings requested");
@@ -240,6 +335,10 @@ async fn main() -> Result<()> {
             _ = tokio::signal::ctrl_c() => {
                 info!("Shutdown signal received");
                 break;
+            }
+            // Timeout to ensure GTK events are processed regularly even when no other events arrive
+            _ = tokio::time::sleep(gtk_poll_interval) => {
+                // Just wake up to process GTK events at the top of the loop
             }
         }
     }

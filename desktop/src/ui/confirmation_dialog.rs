@@ -119,14 +119,17 @@ pub fn show_confirmation_dialog(
     });
 
     // Auto-close after 60 seconds (reject)
+    // Only log timeout if we're actually timing out (tx not already taken)
     let window_timeout = window.clone();
     let tx_timeout = tx.clone();
     glib::timeout_add_seconds_local_once(60, move || {
-        info!("⏱️  Dialog timeout (60s) - auto-rejecting");
+        // Only log and act if the dialog wasn't already handled
         if let Some(tx) = tx_timeout.lock().unwrap().take() {
+            info!("⏱️  Dialog timeout (60s) - auto-rejecting");
             let _ = tx.send(ConfirmationResult::Rejected);
+            window_timeout.close();
         }
-        window_timeout.close();
+        // If tx was already taken, the dialog was handled - do nothing
     });
 
     info!("📺 Presenting dialog window to user...");

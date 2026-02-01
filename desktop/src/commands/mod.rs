@@ -21,6 +21,12 @@ use tracing::debug;
 
 use crate::input::{InputInjector, Key, Modifier};
 
+mod matcher;
+pub use matcher::{CombinedMatcher, MatchResult, TextSegment};
+
+mod word_buffer;
+pub use word_buffer::{ProcessedItem, WordBuffer};
+
 /// Voice command types.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VoiceCommand {
@@ -70,21 +76,11 @@ pub fn execute(command: &VoiceCommand, injector: &dyn InputInjector) -> Result<(
     debug!("Executing command: {:?}", command);
 
     match command {
-        VoiceCommand::Enter => {
-            injector.press_key(Key::Enter)
-        }
-        VoiceCommand::SelectAll => {
-            injector.key_combo(&[Modifier::Ctrl], Key::A)
-        }
-        VoiceCommand::Copy => {
-            injector.key_combo(&[Modifier::Ctrl], Key::C)
-        }
-        VoiceCommand::Paste => {
-            injector.key_combo(&[Modifier::Ctrl], Key::V)
-        }
-        VoiceCommand::Cut => {
-            injector.key_combo(&[Modifier::Ctrl], Key::X)
-        }
+        VoiceCommand::Enter => injector.press_key(Key::Enter),
+        VoiceCommand::SelectAll => injector.key_combo(&[Modifier::Ctrl], Key::A),
+        VoiceCommand::Copy => injector.key_combo(&[Modifier::Ctrl], Key::C),
+        VoiceCommand::Paste => injector.key_combo(&[Modifier::Ctrl], Key::V),
+        VoiceCommand::Cut => injector.key_combo(&[Modifier::Ctrl], Key::X),
         VoiceCommand::Cancel => {
             debug!("Cancel command - no action taken");
             Ok(())
@@ -100,7 +96,10 @@ mod tests {
     fn test_voice_command_parse() {
         assert_eq!(VoiceCommand::parse("ENTER"), Some(VoiceCommand::Enter));
         assert_eq!(VoiceCommand::parse("enter"), Some(VoiceCommand::Enter));
-        assert_eq!(VoiceCommand::parse("SELECT_ALL"), Some(VoiceCommand::SelectAll));
+        assert_eq!(
+            VoiceCommand::parse("SELECT_ALL"),
+            Some(VoiceCommand::SelectAll)
+        );
         assert_eq!(VoiceCommand::parse("COPY"), Some(VoiceCommand::Copy));
         assert_eq!(VoiceCommand::parse("PASTE"), Some(VoiceCommand::Paste));
         assert_eq!(VoiceCommand::parse("CUT"), Some(VoiceCommand::Cut));

@@ -39,7 +39,6 @@ pub const MTU_INFO_UUID: Uuid = Uuid::from_u128(0xa1b2c3d4_e5f6_7890_abcd_ef1234
 pub mod flags {
     pub const FIRST: u8 = 0x08; // First packet of message
     pub const LAST: u8 = 0x04; // Last packet of message
-    pub const ACK_REQ: u8 = 0x02; // Request acknowledgment
 }
 
 /// BLE status codes (for Status characteristic).
@@ -49,24 +48,11 @@ pub enum StatusCode {
     Idle = 0x00,            // Not paired
     AwaitingPairing = 0x01, // Awaiting pairing
     Paired = 0x02,          // Paired and ready
-    Busy = 0x03,            // Processing command
-    Error = 0xFF,           // Error state
 }
 
 impl StatusCode {
     pub fn as_bytes(&self) -> Vec<u8> {
         vec![*self as u8]
-    }
-
-    pub fn from_u8(value: u8) -> Option<Self> {
-        match value {
-            0x00 => Some(Self::Idle),
-            0x01 => Some(Self::AwaitingPairing),
-            0x02 => Some(Self::Paired),
-            0x03 => Some(Self::Busy),
-            0xFF => Some(Self::Error),
-            _ => None,
-        }
     }
 }
 
@@ -74,12 +60,6 @@ impl StatusCode {
 pub mod config {
     /// Default MTU (minimum for all BLE devices).
     pub const DEFAULT_MTU: usize = 23;
-
-    /// Target MTU to negotiate (512 bytes allows ~508 byte payloads).
-    pub const TARGET_MTU: usize = 512;
-
-    /// Minimum acceptable MTU.
-    pub const MIN_MTU: usize = 23;
 
     /// ATT protocol overhead (3 bytes).
     pub const ATT_OVERHEAD: usize = 3;
@@ -114,14 +94,6 @@ mod tests {
             COMMAND_RX_UUID.to_string().to_lowercase(),
             "a1b2c3d4-e5f6-7890-abcd-ef1234567891"
         );
-    }
-
-    #[test]
-    fn test_status_code_conversion() {
-        assert_eq!(StatusCode::from_u8(0x00), Some(StatusCode::Idle));
-        assert_eq!(StatusCode::from_u8(0x02), Some(StatusCode::Paired));
-        assert_eq!(StatusCode::from_u8(0xFF), Some(StatusCode::Error));
-        assert_eq!(StatusCode::from_u8(0x99), None);
     }
 
     #[test]
