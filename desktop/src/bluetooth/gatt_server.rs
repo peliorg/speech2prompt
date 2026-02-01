@@ -27,7 +27,7 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::{debug, error, info, warn};
 
 use super::ble_constants::*;
-use super::protocol::{Message, MessageType, PairAckPayload, PairRequestPayload};
+use super::protocol::{Message, MessageType, PairAckPayload, PairRequestPayload, WordPayload};
 use super::reassembler::{chunk_message, MessageReassembler};
 use crate::crypto::CryptoContext;
 use crate::crypto::ecdh::EcdhKeypair;
@@ -37,6 +37,12 @@ use crate::crypto::ecdh::EcdhKeypair;
 pub enum ConnectionEvent {
     /// Text received from the Android app.
     TextReceived(String),
+    /// Word received from the Android app (with session info).
+    WordReceived {
+        word: String,
+        seq: Option<u64>,  // Optional for backward compatibility
+        session: String,
+    },
     /// Command received from the Android app.
     CommandReceived(String),
     /// Connection established.
@@ -54,13 +60,11 @@ pub enum ConnectionEvent {
 
 /// State of the connection.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ConnectionState {
+enum ConnectionState {
     /// Waiting for pairing.
     AwaitingPair,
     /// Paired and authenticated.
     Authenticated,
-    /// Disconnected.
-    Disconnected,
 }
 
 /// Pending pairing state during ECDH exchange.
@@ -413,7 +417,7 @@ impl GattServer {
                 // Only verify messages after authentication for types that require it
                 let should_verify = matches!(
                     message.message_type,
-                    MessageType::Text | MessageType::Command
+                    MessageType::Text | MessageType::Word | MessageType::Command
                 );
                 
                 if should_verify {
@@ -489,6 +493,39 @@ impl GattServer {
                     let _ = event_tx
                         .send(ConnectionEvent::TextReceived(message.payload.clone()))
                         .await;
+
+                    // Send ACK
+                    let ack = Message::ack(message.timestamp);
+                    Self::send_response_internal(
+                        ack,
+                        &state_guard,
+                        response_tx.clone(),
+                    )
+                    .await;
+                }
+                MessageType::Word => {
+                    if state_guard.state != ConnectionState::Authenticated {
+                        warn!("Received WORD before authentication");
+                        return Ok(());
+                    }
+
+                    // Parse WordPayload
+                    match WordPayload::from_json(&message.payload) {
+                        Ok(word_payload) => {
+                            debug!("Word received: '{}' seq={:?} session={}", 
+                                   word_payload.word, word_payload.seq, word_payload.session);
+                            let _ = event_tx
+                                .send(ConnectionEvent::WordReceived {
+                                    word: word_payload.word,
+                                    seq: word_payload.seq,
+                                    session: word_payload.session,
+                                })
+                                .await;
+                        }
+                        Err(e) => {
+                            error!("Failed to parse WORD payload: {}", e);
+                        }
+                    }
 
                     // Send ACK
                     let ack = Message::ack(message.timestamp);
@@ -639,8 +676,7 @@ impl GattServer {
     pub async fn reject_pairing(&self, reason: &str) -> Result<()> {
         let state = self.state.read().await;
         
-        let device_id = state.device_id.as_ref()
-            .map(|s| s.as_str())
+        let device_id = state.device_id.as_deref()
             .unwrap_or("unknown");
         
         // Create PAIR_ACK with error status

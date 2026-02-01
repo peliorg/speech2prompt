@@ -16,8 +16,11 @@
 
 mod confirmation_dialog;
 mod history_window;
+mod manage_commands;
 mod tray;
 
 pub use confirmation_dialog::{show_confirmation_dialog, ConfirmationResult};
-pub use history_window::show_history_window;
-pub use tray::{run_tray, TrayAction, TrayHandle};
+pub use manage_commands::{
+    show_manage_commands_window, show_recording_dialog, ManageCommandsEvent,
+};
+pub use tray::{run_tray, TrayAction};

@@ -51,15 +51,18 @@ impl ConnectionStatus {
 pub struct AppState {
     /// Current connection status.
     pub connection_status: RwLock<ConnectionStatus>,
-    
+
     /// Whether input injection is enabled.
     pub input_enabled: RwLock<bool>,
-    
+
     /// Connected device name.
     pub connected_device: RwLock<Option<String>>,
-    
+
     /// Last received text (for tooltip).
     pub last_text: RwLock<Option<String>>,
+
+    /// Command being recorded (if in recording mode).
+    pub recording_command: RwLock<Option<String>>,
 }
 
 impl Default for AppState {
@@ -69,6 +72,7 @@ impl Default for AppState {
             input_enabled: RwLock::new(true),
             connected_device: RwLock::new(None),
             last_text: RwLock::new(None),
+            recording_command: RwLock::new(None),
         }
     }
 }
@@ -114,5 +118,25 @@ impl AppState {
 
     pub fn get_last_text(&self) -> Option<String> {
         self.last_text.read().clone()
+    }
+
+    /// Start recording mode for a command.
+    pub fn start_recording(&self, command: String) {
+        *self.recording_command.write() = Some(command);
+    }
+
+    /// Stop recording mode and return the command that was being recorded.
+    pub fn stop_recording(&self) -> Option<String> {
+        self.recording_command.write().take()
+    }
+
+    /// Check if we're in recording mode.
+    pub fn is_recording(&self) -> bool {
+        self.recording_command.read().is_some()
+    }
+
+    /// Get the command being recorded.
+    pub fn get_recording_command(&self) -> Option<String> {
+        self.recording_command.read().clone()
     }
 }

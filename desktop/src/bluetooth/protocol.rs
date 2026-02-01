@@ -21,13 +21,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::crypto::CryptoContext;
 
 /// Protocol version.
-pub const PROTOCOL_VERSION: u8 = 2;
+pub const PROTOCOL_VERSION: u8 = 3;
 
 /// Message types supported by the protocol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MessageType {
     #[serde(rename = "TEXT")]
     Text,
+    #[serde(rename = "WORD")]
+    Word,
     #[serde(rename = "COMMAND")]
     Command,
     #[serde(rename = "HEARTBEAT")]
@@ -45,6 +47,7 @@ impl MessageType {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Text => "TEXT",
+            Self::Word => "WORD",
             Self::Command => "COMMAND",
             Self::Heartbeat => "HEARTBEAT",
             Self::Ack => "ACK",
@@ -95,21 +98,6 @@ impl Message {
         }
     }
 
-    /// Create a TEXT message.
-    pub fn text(content: impl Into<String>) -> Self {
-        Self::new(MessageType::Text, content)
-    }
-
-    /// Create a COMMAND message.
-    pub fn command(cmd: impl Into<String>) -> Self {
-        Self::new(MessageType::Command, cmd)
-    }
-
-    /// Create a HEARTBEAT message.
-    pub fn heartbeat() -> Self {
-        Self::new(MessageType::Heartbeat, "")
-    }
-
     /// Create an ACK message for a given timestamp.
     pub fn ack(original_timestamp: u64) -> Self {
         Self::new(MessageType::Ack, original_timestamp.to_string())
@@ -130,7 +118,11 @@ impl Message {
         // Encrypt payload for sensitive message types
         if matches!(
             self.message_type,
-            MessageType::Text | MessageType::Command | MessageType::PairReq | MessageType::PairAck
+            MessageType::Text
+                | MessageType::Word
+                | MessageType::Command
+                | MessageType::PairReq
+                | MessageType::PairAck
         ) {
             self.payload = ctx.encrypt(&self.payload)?;
         }
@@ -159,7 +151,11 @@ impl Message {
         // Decrypt payload for sensitive message types
         if matches!(
             self.message_type,
-            MessageType::Text | MessageType::Command | MessageType::PairReq | MessageType::PairAck
+            MessageType::Text
+                | MessageType::Word
+                | MessageType::Command
+                | MessageType::PairReq
+                | MessageType::PairAck
         ) {
             self.payload = ctx.decrypt(&self.payload)?;
         }
@@ -181,6 +177,27 @@ impl Message {
     }
 }
 
+/// Payload for WORD messages - single word with session info.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WordPayload {
+    /// The word itself (no trailing space)
+    pub word: String,
+    /// Sequence number (optional, for backward compatibility)
+    #[serde(default)]
+    pub seq: Option<u64>,
+    /// Session ID to detect restarts
+    pub session: String,
+    /// Optional timestamp for logging
+    #[serde(default)]
+    pub ts: Option<u64>,
+}
+
+impl WordPayload {
+    pub fn from_json(json: &str) -> Result<Self> {
+        Ok(serde_json::from_str(json)?)
+    }
+}
+
 /// Pairing request payload.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PairRequestPayload {
@@ -191,23 +208,6 @@ pub struct PairRequestPayload {
 }
 
 impl PairRequestPayload {
-    pub fn new(device_id: impl Into<String>, public_key: impl Into<String>) -> Self {
-        Self {
-            device_id: device_id.into(),
-            device_name: None,
-            public_key: public_key.into(),
-        }
-    }
-
-    pub fn with_name(mut self, name: impl Into<String>) -> Self {
-        self.device_name = Some(name.into());
-        self
-    }
-
-    pub fn to_json(&self) -> Result<String> {
-        Ok(serde_json::to_string(self)?)
-    }
-
     pub fn from_json(json: &str) -> Result<Self> {
         Ok(serde_json::from_str(json)?)
     }
@@ -222,6 +222,8 @@ pub struct PairAckPayload {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub public_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol_version: Option<u8>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -232,21 +234,13 @@ pub enum PairStatus {
 }
 
 impl PairAckPayload {
-    pub fn success(device_id: impl Into<String>) -> Self {
-        Self {
-            device_id: device_id.into(),
-            status: PairStatus::Ok,
-            error: None,
-            public_key: None,
-        }
-    }
-
     pub fn success_with_key(device_id: impl Into<String>, public_key: impl Into<String>) -> Self {
         Self {
             device_id: device_id.into(),
             status: PairStatus::Ok,
             error: None,
             public_key: Some(public_key.into()),
+            protocol_version: None,
         }
     }
 
@@ -256,15 +250,12 @@ impl PairAckPayload {
             status: PairStatus::Error,
             error: Some(error.into()),
             public_key: None,
+            protocol_version: None,
         }
     }
 
     pub fn to_json(&self) -> Result<String> {
         Ok(serde_json::to_string(self)?)
-    }
-
-    pub fn from_json(json: &str) -> Result<Self> {
-        Ok(serde_json::from_str(json)?)
     }
 }
 
@@ -292,36 +283,29 @@ impl CommandCode {
             _ => None,
         }
     }
-
-    /// Convert to string.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Enter => "ENTER",
-            Self::SelectAll => "SELECT_ALL",
-            Self::Copy => "COPY",
-            Self::Paste => "PASTE",
-            Self::Cut => "CUT",
-            Self::Cancel => "CANCEL",
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // Test helper to create a TEXT message
+    fn text_message(content: &str) -> Message {
+        Message::new(MessageType::Text, content)
+    }
+
     #[test]
     fn test_message_serialization() {
-        let msg = Message::text("Hello, World!");
+        let msg = text_message("Hello, World!");
         let json = msg.to_json().unwrap();
 
-        assert!(json.contains("\"v\":2"));
+        assert!(json.contains("\"v\":3"));
         assert!(json.contains("\"t\":\"TEXT\""));
         assert!(json.contains("\"p\":\"Hello, World!\""));
         assert!(json.ends_with('\n'));
 
         let parsed = Message::from_json(&json).unwrap();
-        assert_eq!(parsed.version, 2);
+        assert_eq!(parsed.version, 3);
         assert_eq!(parsed.message_type, MessageType::Text);
         assert_eq!(parsed.payload, "Hello, World!");
     }
@@ -330,7 +314,7 @@ mod tests {
     fn test_message_signing() {
         let ctx = CryptoContext::from_pin("123456", "android-abc", "linux-xyz");
 
-        let mut msg = Message::text("test");
+        let mut msg = text_message("test");
         msg.sign(&ctx);
 
         assert!(!msg.checksum.is_empty());
@@ -345,7 +329,7 @@ mod tests {
     fn test_message_encryption() {
         let ctx = CryptoContext::from_pin("123456", "android-abc", "linux-xyz");
 
-        let mut msg = Message::text("secret message");
+        let mut msg = text_message("secret message");
         let original_payload = msg.payload.clone();
 
         msg.sign_and_encrypt(&ctx).unwrap();
@@ -367,21 +351,12 @@ mod tests {
     }
 
     #[test]
-    fn test_pair_payloads() {
-        let req = PairRequestPayload::new("android-123", "test-public-key").with_name("My Phone");
-        let json = req.to_json().unwrap();
-        let parsed = PairRequestPayload::from_json(&json).unwrap();
-
-        assert_eq!(parsed.device_id, "android-123");
-        assert_eq!(parsed.device_name, Some("My Phone".to_string()));
-        assert_eq!(parsed.public_key, "test-public-key");
-
+    fn test_pair_ack_payload() {
         let ack = PairAckPayload::success_with_key("linux-456", "linux-public-key");
         let json = ack.to_json().unwrap();
-        let parsed = PairAckPayload::from_json(&json).unwrap();
 
-        assert_eq!(parsed.device_id, "linux-456");
-        assert_eq!(parsed.status, PairStatus::Ok);
-        assert_eq!(parsed.public_key, Some("linux-public-key".to_string()));
+        assert!(json.contains("linux-456"));
+        assert!(json.contains("linux-public-key"));
+        assert!(json.contains("ok"));
     }
 }

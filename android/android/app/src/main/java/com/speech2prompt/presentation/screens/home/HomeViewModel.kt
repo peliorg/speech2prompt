@@ -7,13 +7,11 @@ import com.speech2prompt.domain.model.*
 import com.speech2prompt.service.ble.BleManager
 import com.speech2prompt.service.speech.SpeechRecognitionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import java.util.UUID
 import javax.inject.Inject
 
 /**
@@ -49,9 +47,14 @@ sealed interface HomeEvent {
  * - Speech control (start/stop/pause/resume)
  * - Real-time transcription display
  * - Sound level visualization
- * - Send text and commands via BLE
+ * - Send individual words via BLE
  * - Connection status monitoring
  * - Permission checking
+ * 
+ * Word Sending Protocol:
+ * - Each word is sent individually as a WORD message
+ * - Session ID changes when listening starts (new UUID)
+ * - Desktop handles command matching and text assembly
  * 
  * Follows MVVM + UDF (Unidirectional Data Flow) pattern:
  * - Immutable UI state exposed via StateFlow
@@ -66,12 +69,6 @@ class HomeViewModel @Inject constructor(
     
     companion object {
         private const val TAG = "HomeViewModel"
-        
-        // Debounce interval for partial results (ms)
-        private const val PARTIAL_DEBOUNCE_MS = 100L
-        
-        // Minimum number of new characters before sending partial
-        private const val MIN_NEW_CHARS = 2
     }
     
     // ==================== UI State ====================
@@ -84,22 +81,22 @@ class HomeViewModel @Inject constructor(
     private val _events = Channel<HomeEvent>(Channel.BUFFERED)
     val events: Flow<HomeEvent> = _events.receiveAsFlow()
     
-    // ==================== Partial Results Tracking ====================
+    // ==================== Word Queue State ====================
+    //
+    // Simple word-by-word sending.
+    // Desktop handles command matching and text assembly.
+    //
     
-    // Track what text has been sent to avoid duplicates
-    private var lastSentText = ""
+    // Session ID - new UUID each time listening starts
+    private var currentSession = UUID.randomUUID().toString()
     
-    // Track the last text actually transmitted (updated immediately on send, not after debounce)
-    private var lastActuallySentText = ""
+    // Track how many words have been sent from the current accumulated text
+    // This allows repeated words (e.g., "the cat sat on the mat" - "the" appears twice)
+    // while still avoiding re-sending on recognition restart.
+    private var sentWordCount = 0
     
-    // Track all sent segments to detect duplicates when recognizer changes text
-    private val sentSegments = mutableSetOf<String>()
-    
-    // Track text that is pending send (in debounce)
-    private var pendingSendText = ""
-    
-    // Debounce job for partial results
-    private var partialDebounceJob: Job? = null
+    // Track the last partial result to detect when it's genuinely new speech
+    private var lastPartialText = ""
     
     // ==================== Initialization ====================
     
@@ -125,10 +122,49 @@ class HomeViewModel @Inject constructor(
      */
     private fun observeConnectionState() {
         viewModelScope.launch {
+            // Track previous state properly to avoid race conditions with other StateFlow collectors.
+            // We use a local variable that persists across emissions, rather than reading from
+            // _uiState which could be modified by other coroutines between our read and update.
+            var previousState: BtConnectionState? = null
+            
             bleManager.connectionState.collect { state ->
+                // Use the tracked previous state (null on first emission)
+                val wasConnected = previousState == BtConnectionState.CONNECTED
+                val isNowConnected = state == BtConnectionState.CONNECTED
+                
+                Log.d(TAG, "Connection state change: $previousState -> $state (wasConnected=$wasConnected, isNowConnected=$isNowConnected)")
+                
+                // Update UI state
                 _uiState.update { 
                     it.copy(connectionState = state) 
                 }
+                
+                // Stop listening when connection is lost - no point listening if we can't send words
+                // This must happen BEFORE clearing sentWordCount, so we don't lose track of what was sent
+                if (wasConnected && !isNowConnected) {
+                    Log.d(TAG, "Connection lost (was CONNECTED, now $state) - stopping speech recognition")
+                    stopListening()
+                    // Also clear word tracking immediately when disconnecting
+                    // This ensures clean state even if reconnect happens quickly
+                    sentWordCount = 0
+                    lastPartialText = ""
+                    Log.d(TAG, "Cleared word tracking state on disconnect")
+                }
+                
+                // Clear word tracking state when connection is established/re-established
+                // This prevents stale sentWordCount from blocking new words after reconnect
+                // Note: This handles the case where we reconnect without going through stopListening
+                // (e.g., if disconnect detection was delayed)
+                if (isNowConnected && previousState != null && previousState != BtConnectionState.CONNECTED) {
+                    Log.d(TAG, "Connection established (was $previousState), clearing word tracking state")
+                    sentWordCount = 0
+                    lastPartialText = ""
+                    // Note: Don't reset session/sequence here - let startListening handle that
+                    // This only clears the "already sent" tracking to allow re-sending words
+                }
+                
+                // Update tracked previous state for next emission
+                previousState = state
             }
         }
         
@@ -187,7 +223,10 @@ class HomeViewModel @Inject constructor(
     }
     
     /**
-     * Observe recognized speech and send via BLE
+     * Observe recognized speech and send words via BLE.
+     * 
+     * Each word is sent individually with a sequence number.
+     * Desktop handles command matching and text assembly.
      */
     private fun observeSpeechResults() {
         // Handle partial results (word-by-word sending)
@@ -206,268 +245,140 @@ class HomeViewModel @Inject constructor(
             }
         }
         
-        // Handle recognized commands
-        viewModelScope.launch {
-            speechRecognitionManager.recognizedCommand.collect { command ->
-                sendCommand(command)
-            }
-        }
+        // Note: We ignore recognizedCommand - desktop handles all command matching now
     }
     
     /**
      * Handle partial speech recognition result.
-     * Sends incremental text (only new words) with debouncing.
+     * 
+     * Approach: Split into words, send words at positions we haven't sent yet.
+     * We track the count of sent words, not word content, so repeated words work.
+     * 
+     * Example: User says "the cat sat on the mat"
+     * - Partial 1: "the" → 1 word, sentWordCount=0, send "the", sentWordCount=1
+     * - Partial 2: "the cat" → 2 words, sentWordCount=1, send "cat", sentWordCount=2
+     * - Partial 3: "the cat sat on the mat" → 6 words, sentWordCount=2, send "sat","on","the","mat", sentWordCount=6
+     * 
+     * Recognition restart handling:
+     * - If text no longer starts with what we had before, reset sentWordCount
+     * - This handles error 7 (no speech) restarts
      */
     private fun handlePartialResult(text: String) {
         if (!isConnected() || text.isBlank()) return
         
-        // Check if we have new content beyond what was already sent
-        val newText = getNewText(text)
-        if (newText.isBlank() || newText.length < MIN_NEW_CHARS) {
-            return
+        // Split into words
+        val words = text.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        
+        // Check if this looks like genuinely new speech (text doesn't start with last partial)
+        // This helps detect when user starts a completely new utterance
+        val isNewUtterance = lastPartialText.isNotEmpty() && 
+            !text.startsWith(lastPartialText.take(lastPartialText.length / 2 + 1))
+        
+        if (isNewUtterance) {
+            // User started speaking something completely different - reset tracking
+            Log.d(TAG, "New utterance detected, resetting sent word count. Old: '$lastPartialText', New: '$text'")
+            sentWordCount = 0
         }
         
-        // DUPLICATE CHECK: Skip if this exact text was just sent
-        // This prevents "nice nice nice" when recognizer keeps returning same partial
-        if (newText.trim() == lastActuallySentText.trim()) {
-            Log.d(TAG, "Skipping duplicate partial: '$newText'")
-            return
-        }
+        lastPartialText = text
         
-        // Also check if we've already sent this exact segment
-        if (sentSegments.contains(newText.trim())) {
-            Log.d(TAG, "Skipping already-sent segment: '$newText'")
-            return
+        // Send words at positions we haven't sent yet
+        // This allows repeated words like "the" to be sent multiple times
+        for (i in sentWordCount until words.size) {
+            sendWord(words[i])
         }
-        
-        // Track what we're about to send (for duplicate detection with final result)
-        pendingSendText = text
-        
-        // Cancel previous debounce job and start a new one
-        partialDebounceJob?.cancel()
-        partialDebounceJob = viewModelScope.launch {
-            delay(PARTIAL_DEBOUNCE_MS)
-            
-            // Re-check new text after debounce (may have changed)
-            val currentNewText = getNewText(text)
-            if (currentNewText.isNotBlank() && currentNewText.length >= MIN_NEW_CHARS) {
-                // Final duplicate check before sending
-                if (currentNewText.trim() != lastActuallySentText.trim() && 
-                    !sentSegments.contains(currentNewText.trim())) {
-                    Log.d(TAG, "Sending partial: '$currentNewText' (lastSent='$lastSentText')")
-                    
-                    // Use NonCancellable context to ensure send completes even if parent job is cancelled
-                    // This prevents race conditions where rapid partial results cancel in-flight sends
-                    withContext(NonCancellable) {
-                        sendPartialText(currentNewText)
-                    }
-                    
-                    lastActuallySentText = currentNewText
-                    sentSegments.add(currentNewText.trim())
-                    lastSentText = text
-                    pendingSendText = ""
-                } else {
-                    Log.d(TAG, "Skipping duplicate after debounce: '$currentNewText'")
-                }
-            }
-        }
+        sentWordCount = words.size
     }
     
     /**
      * Handle final speech recognition result.
-     * Sends any remaining text that wasn't sent as partial.
+     * 
+     * The final result may differ from partials in important ways:
+     * - Words that appeared in partials may be removed (e.g., "Aha" disappears)
+     * - New words may be added at the end (e.g., "Koh" appears only in final)
+     * 
+     * Example scenario that caused word loss:
+     * - Partial results: "Aha" "to" "bylo" "kuch" "a" "ne" -> sentWordCount=6
+     * - Final result: "to bylo kuch a ne Koh" (6 words, but "Aha" removed, "Koh" added)
+     * - Old logic: for (i in 6 until 6) -> nothing sent -> "Koh" lost!
+     * 
+     * Fix: Compare final text to lastPartialText. If they differ substantially,
+     * find and send any new trailing words that weren't in partials.
      */
     private fun handleFinalResult(text: String) {
-        // Cancel any pending partial send
-        partialDebounceJob?.cancel()
-        partialDebounceJob = null
+        if (!isConnected() || text.isBlank()) return
         
-        // Check against both lastSentText and pendingSendText to avoid duplicates
-        // If the final text matches what we were about to send (or already sent), skip
-        val effectiveLastSent = if (pendingSendText.isNotBlank() && text.trim().startsWith(pendingSendText.trim())) {
-            // The pending partial was about to send this same text, treat it as already sent
-            pendingSendText
-        } else {
-            lastSentText
+        val finalWords = text.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        
+        // Standard case: send any words beyond what we've already sent
+        for (i in sentWordCount until finalWords.size) {
+            sendWord(finalWords[i])
         }
         
-        // Get any new text that wasn't sent as partial
-        val newText = getNewTextComparedTo(text, effectiveLastSent)
-        
-        // Also check if the new text (or its significant parts) were already sent
-        val filteredNewText = filterAlreadySentSegments(newText)
-        
-        if (filteredNewText.isNotBlank()) {
-            Log.d(TAG, "Sending final: '$filteredNewText' (full='$text', lastSent='$lastSentText', pending='$pendingSendText')")
-            viewModelScope.launch {
-                sendText(filteredNewText)
+        // Edge case: final text differs from partials (words removed/changed)
+        // In this case, sentWordCount may be >= finalWords.size even though
+        // the final has new words not in partials
+        if (lastPartialText.isNotEmpty() && sentWordCount >= finalWords.size) {
+            val partialWords = lastPartialText.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+            
+            // Find trailing words in final that weren't in partial
+            // We compare from the end, looking for words unique to final
+            val partialWordSet = partialWords.toSet()
+            val trailingNewWords = mutableListOf<String>()
+            
+            // Scan from end of final words
+            for (i in (finalWords.size - 1) downTo 0) {
+                val word = finalWords[i]
+                // If we find a word that matches partial, stop scanning
+                // (we assume earlier words were already sent)
+                if (partialWordSet.contains(word)) {
+                    break
+                }
+                trailingNewWords.add(0, word)
             }
-        } else {
-            Log.d(TAG, "Final result skipped (already sent): '$text'")
+            
+            if (trailingNewWords.isNotEmpty()) {
+                Log.d(TAG, "Final result has ${trailingNewWords.size} new trailing words not in partial: $trailingNewWords")
+                for (word in trailingNewWords) {
+                    sendWord(word)
+                }
+            }
         }
         
-        // Reset tracking for next speech session
-        lastSentText = ""
-        lastActuallySentText = ""
-        pendingSendText = ""
-        sentSegments.clear()
+        sentWordCount = finalWords.size
+        
+        // Note: We intentionally do NOT reset sentWordCount here.
+        // Android speech recognition auto-restarts and may produce overlapping results.
+        // sentWordCount is only reset when:
+        // 1. A new session starts (startListening)
+        // 2. A genuinely new utterance is detected (in handlePartialResult)
     }
     
     /**
-     * Filter out any segments from text that were already sent.
-     * This handles cases where the recognizer reorders or includes previously sent text.
-     * 
-     * IMPORTANT: This function should NOT filter out repeated words.
-     * Example: "hello hello" - first "hello" sent as partial, final should send second "hello"
-     * 
-     * Strategy:
-     * - Only filter if the text STARTS with a sent segment AND has additional text after it
-     * - If text exactly matches a sent segment (no extra text), DON'T filter it
-     *   (it's a repeated word, not a duplicate send)
+     * Send a single word with retry logic.
+     * Retries up to 2 more times if the initial send fails.
      */
-    private fun filterAlreadySentSegments(text: String): String {
-        if (text.isBlank() || sentSegments.isEmpty()) return text
-        
-        val trimmed = text.trim()
-        
-        // Check if text starts with any sent segment
-        for (segment in sentSegments) {
-            if (trimmed.startsWith(segment)) {
-                // Check if there's additional text after the segment
-                val remaining = trimmed.substring(segment.length).trim()
+    private fun sendWord(word: String) {
+        viewModelScope.launch {
+            var success = false
+            var attempts = 0
+            val maxAttempts = 3
+            
+            while (!success && attempts < maxAttempts) {
+                attempts++
+                val message = Message.word(word, currentSession)
+                success = bleManager.sendMessage(message)
                 
-                if (remaining.isNotEmpty()) {
-                    // There's more text after the segment, so remove the segment prefix
-                    return remaining
-                } else {
-                    // Text exactly matches the segment with no additional content
-                    // This is likely a repeated word (e.g., second "hello" in "hello hello")
-                    // DON'T filter it out - return it as-is
-                    return trimmed
+                if (success) {
+                    Log.d(TAG, "Sent word: '$word' session=$currentSession (attempt $attempts)")
+                } else if (attempts < maxAttempts) {
+                    Log.w(TAG, "Failed to send word: '$word' (attempt $attempts/$maxAttempts), retrying...")
+                    delay(50)
                 }
             }
-        }
-        
-        // No matching segments found, return original
-        return trimmed
-    }
-    
-    /**
-     * Get the new portion of text that hasn't been sent yet.
-     * 
-     * Handles the case where partial results build up incrementally:
-     * "hello" -> "hello world" -> "hello world how" -> etc.
-     */
-    private fun getNewText(fullText: String): String {
-        return getNewTextComparedTo(fullText, lastSentText)
-    }
-    
-    /**
-     * Get the new portion of text compared to a reference (what was already sent).
-     * 
-     * Handles several cases:
-     * 1. Simple append: "hello" -> "hello world" -> returns "world"
-     * 2. Exact match: returns ""
-     * 3. Recognizer correction: "Pane jo" -> "Planeo" -> uses word-level comparison
-     */
-    private fun getNewTextComparedTo(fullText: String, sentText: String): String {
-        val trimmedFull = fullText.trim()
-        val trimmedSent = sentText.trim()
-        
-        if (trimmedSent.isEmpty()) {
-            return trimmedFull
-        }
-        
-        // If text is exactly what we sent, nothing new
-        if (trimmedFull == trimmedSent) {
-            return ""
-        }
-        
-        // Check if the full text starts with what we already sent (simple append case)
-        if (trimmedFull.startsWith(trimmedSent)) {
-            return trimmedFull.substring(trimmedSent.length).trimStart()
-        }
-        
-        // Word-level comparison for cases where recognizer modifies earlier text
-        // e.g., "speak English A můžu mluvit" sent, then "English A můžu mluvit i česky" comes in
-        val fullWords = trimmedFull.split(Regex("\\s+"))
-        val sentWords = trimmedSent.split(Regex("\\s+"))
-        
-        // Find where the sent words appear in full words (allowing for modifications)
-        // Strategy: find the longest suffix of sentWords that matches a suffix in the middle of fullWords
-        var matchEndIndex = -1
-        
-        // Try to find where sentWords content ends in fullWords
-        for (i in fullWords.indices) {
-            // Check if sentWords ends at position i
-            val potentialMatchStart = i - sentWords.size + 1
-            if (potentialMatchStart >= 0) {
-                val subList = fullWords.subList(potentialMatchStart, i + 1)
-                if (subList == sentWords) {
-                    matchEndIndex = i
-                }
-            }
-        }
-        
-        // If we found a match, return everything after it
-        if (matchEndIndex >= 0 && matchEndIndex < fullWords.size - 1) {
-            return fullWords.subList(matchEndIndex + 1, fullWords.size).joinToString(" ")
-        }
-        
-        // Fallback: check if any significant portion of sent text appears in full text
-        // This handles cases like "English A můžu mluvit" appearing in the middle
-        val sentIndex = trimmedFull.indexOf(trimmedSent)
-        if (sentIndex >= 0) {
-            val afterSent = trimmedFull.substring(sentIndex + trimmedSent.length).trimStart()
-            return afterSent
-        }
-        
-        // Check individual sent segments
-        for (segment in sentSegments) {
-            val segmentIndex = trimmedFull.indexOf(segment)
-            if (segmentIndex >= 0) {
-                // Found a sent segment, return text after it (if at reasonable position)
-                val afterSegment = trimmedFull.substring(segmentIndex + segment.length).trimStart()
-                if (afterSegment.isNotBlank()) {
-                    return afterSegment
-                }
-            }
-        }
-        
-        // Last resort: use common prefix (original logic)
-        val commonPrefix = trimmedFull.commonPrefixWith(trimmedSent)
-        return if (commonPrefix.isNotEmpty() && trimmedFull.length > commonPrefix.length) {
-            trimmedFull.substring(commonPrefix.length).trimStart()
-        } else {
-            // Completely different - might be a reset
-            // But don't send if it's shorter or similar length (likely a correction)
-            if (trimmedFull.length > trimmedSent.length + MIN_NEW_CHARS) {
-                trimmedFull
-            } else {
-                ""
-            }
-        }
-    }
-    
-    /**
-     * Send partial text (incremental words during speech).
-     * Adds trailing space so words don't concatenate on the receiver.
-     */
-    private suspend fun sendPartialText(text: String) {
-        if (!isConnected()) return
-        
-        // Add trailing space so words don't run together on receiver
-        val textWithSpace = if (text.endsWith(" ")) text else "$text "
-        val message = Message.text(textWithSpace)
-        
-        // Retry once on failure (handles transient BLE errors)
-        var success = bleManager.sendMessage(message)
-        if (!success) {
-            Log.w(TAG, "Failed to send partial text: $text, retrying...")
-            delay(100) // Brief delay before retry
-            success = bleManager.sendMessage(message)
+            
             if (!success) {
-                Log.e(TAG, "Failed to send partial text after retry: $text")
+                Log.e(TAG, "Failed to send word: '$word' after $maxAttempts attempts")
             }
         }
     }
@@ -475,7 +386,8 @@ class HomeViewModel @Inject constructor(
     // ==================== Speech Control Actions ====================
     
     /**
-     * Start listening for speech
+     * Start listening for speech.
+     * Creates a new session.
      */
     fun startListening() {
         viewModelScope.launch {
@@ -490,13 +402,12 @@ class HomeViewModel @Inject constructor(
                 return@launch
             }
             
-            // Reset partial result tracking for new session
-            lastSentText = ""
-            lastActuallySentText = ""
-            pendingSendText = ""
-            sentSegments.clear()
-            partialDebounceJob?.cancel()
-            partialDebounceJob = null
+            // New session - reset all word tracking state
+            currentSession = UUID.randomUUID().toString()
+            sentWordCount = 0
+            lastPartialText = ""
+            
+            Log.d(TAG, "Starting new session: $currentSession")
             
             speechRecognitionManager.startListening()
         }
@@ -556,52 +467,15 @@ class HomeViewModel @Inject constructor(
     // ==================== BLE Communication Actions ====================
     
     /**
-     * Send text message via BLE.
-     * Adds trailing space so words don't concatenate on the receiver.
-     */
-    private suspend fun sendText(text: String) {
-        if (!isConnected()) {
-            _events.send(HomeEvent.MessageFailed("Not connected"))
-            return
-        }
-        
-        // Add trailing space so words don't run together on receiver
-        val textWithSpace = if (text.endsWith(" ")) text else "$text "
-        val message = Message.text(textWithSpace)
-        val success = bleManager.sendMessage(message)
-        
-        if (success) {
-            _events.send(HomeEvent.MessageSent)
-        } else {
-            _events.send(HomeEvent.MessageFailed("Failed to send message"))
-        }
-    }
-    
-    /**
-     * Send command via BLE
-     */
-    private suspend fun sendCommand(command: CommandCode) {
-        if (!isConnected()) {
-            _events.send(HomeEvent.MessageFailed("Not connected"))
-            return
-        }
-        
-        val message = Message.command(command.code)
-        val success = bleManager.sendMessage(message)
-        
-        if (success) {
-            _events.send(HomeEvent.MessageSent)
-        } else {
-            _events.send(HomeEvent.MessageFailed("Failed to send command"))
-        }
-    }
-    
-    /**
-     * Manually send text (for testing/debug)
+     * Manually send text (for testing/debug).
+     * Sends as individual words with sequence numbers.
      */
     fun sendManualText(text: String) {
-        viewModelScope.launch {
-            sendText(text)
+        if (text.isBlank()) return
+        
+        val words = text.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        for (word in words) {
+            sendWord(word)
         }
     }
     

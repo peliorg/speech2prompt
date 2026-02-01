@@ -23,7 +23,5 @@ mod wayland;
 #[cfg(feature = "x11")]
 mod x11;
 
-pub use injector::{
-    create_injector, create_injector_with_preference, DisplayServer, InputInjector, StubInjector,
-};
+pub use injector::{create_injector, InputInjector};
 pub use keys::{Key, Modifier};

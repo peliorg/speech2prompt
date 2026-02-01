@@ -62,7 +62,9 @@ impl SecureStorage {
 
     /// Get a paired device by Android device ID.
     pub fn get_device_by_android_id(&self, android_id: &str) -> Option<&PairedDevice> {
-        self.devices.values().find(|d| d.android_device_id == android_id)
+        self.devices
+            .values()
+            .find(|d| d.android_device_id == android_id)
     }
 
     /// Remove a paired device.

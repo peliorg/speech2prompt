@@ -84,21 +84,21 @@ impl InputInjector for WaylandInjector {
 
     fn type_text(&self, text: &str) -> Result<()> {
         debug!("Typing text: {} chars", text.len());
-        
+
         // ydotool type command
         self.run_ydotool(&["type", "--clearmodifiers", text])
     }
 
     fn press_key(&self, key: Key) -> Result<()> {
         debug!("Pressing key: {:?}", key);
-        
+
         let key_name = key.to_ydotool();
         self.run_ydotool(&["key", key_name])
     }
 
     fn key_combo(&self, modifiers: &[Modifier], key: Key) -> Result<()> {
         debug!("Key combo: {:?} + {:?}", modifiers, key);
-        
+
         // Build key combo string: "CTRL+A"
         let mut combo = String::new();
         for modifier in modifiers {
@@ -106,7 +106,7 @@ impl InputInjector for WaylandInjector {
             combo.push('+');
         }
         combo.push_str(key.to_ydotool());
-        
+
         self.run_ydotool(&["key", &combo])
     }
 }

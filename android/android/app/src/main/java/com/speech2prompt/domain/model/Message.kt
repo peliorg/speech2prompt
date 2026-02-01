@@ -14,7 +14,7 @@ import java.security.MessageDigest
 /**
  * Protocol version for message compatibility
  */
-const val PROTOCOL_VERSION = 2
+const val PROTOCOL_VERSION = 3
 
 /**
  * JSON configuration for message serialization
@@ -31,6 +31,7 @@ val messageJson = Json {
 @Serializable(with = MessageTypeSerializer::class)
 enum class MessageType(val value: String) {
     TEXT("TEXT"),
+    WORD("WORD"),  // Single word with sequence number
     COMMAND("COMMAND"),
     HEARTBEAT("HEARTBEAT"),
     ACK("ACK"),
@@ -60,6 +61,19 @@ object MessageTypeSerializer : KSerializer<MessageType> {
         return MessageType.fromValue(decoder.decodeString())
     }
 }
+
+/**
+ * Payload for WORD messages - single word with session ID
+ */
+@Serializable
+data class WordPayload(
+    @SerialName("word")
+    val word: String,
+    @SerialName("session")
+    val session: String,
+    @SerialName("ts")
+    val ts: Long = System.currentTimeMillis()
+)
 
 /**
  * Protocol message for BLE communication.
@@ -216,6 +230,17 @@ data class Message(
             return Message(
                 messageType = MessageType.PAIR_ACK,
                 payload = messageJson.encodeToString(PairAckPayload.serializer(), payload)
+            )
+        }
+
+        /**
+         * Create a word message with session ID
+         */
+        fun word(word: String, session: String): Message {
+            val payload = WordPayload(word, session)
+            return Message(
+                messageType = MessageType.WORD,
+                payload = messageJson.encodeToString(WordPayload.serializer(), payload)
             )
         }
     }

@@ -24,13 +24,8 @@ mod reassembler;
 // Protocol (shared)
 mod protocol;
 
-// Export BLE components
-pub use ble_constants::*;
-pub use gatt_server::{GattServer, ConnectionEvent};
-pub use reassembler::{chunk_message, MessageReassembler};
+// Export BLE components (only what's used externally)
+pub use gatt_server::{ConnectionEvent, GattServer};
 
-// Export protocol
-pub use protocol::{
-    CommandCode, Message, MessageType, PairAckPayload, PairRequestPayload, PairStatus,
-    PROTOCOL_VERSION,
-};
+// Export protocol (only what's used externally)
+pub use protocol::CommandCode;
