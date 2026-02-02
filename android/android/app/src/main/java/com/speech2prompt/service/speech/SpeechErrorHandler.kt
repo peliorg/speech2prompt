@@ -34,8 +34,7 @@ class SpeechErrorHandler @Inject constructor() {
         val isTransient: Boolean,
         val suggestedRetryDelay: Duration,
         val requiresPermissionCheck: Boolean = false,
-        val requiresNetworkCheck: Boolean = false,
-        val requiresFullRestart: Boolean = false
+        val requiresNetworkCheck: Boolean = false
     )
     
     /**
@@ -64,16 +63,14 @@ class SpeechErrorHandler @Inject constructor() {
                 code = errorCode,
                 message = "Client-side error",
                 isTransient = true,
-                suggestedRetryDelay = 100.milliseconds,
-                requiresFullRestart = true
+                suggestedRetryDelay = 100.milliseconds
             )
             
             SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> ErrorClassification(
                 code = errorCode,
                 message = "Recognizer busy - please wait",
                 isTransient = true,
-                suggestedRetryDelay = 1.seconds,
-                requiresFullRestart = true
+                suggestedRetryDelay = 1.seconds
             )
             
             // ============ Real Errors ============

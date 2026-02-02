@@ -24,7 +24,6 @@ hilt = "2.51.1"
 hiltNavigationCompose = "1.3.0"
 
 # Networking
-bouncycastle = "1.80"
 okhttp = "4.12.0"
 retrofit = "2.11.0"
 
@@ -70,8 +69,6 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 
 # Security
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
-bouncycastle = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
-
 # Kotlin Coroutines
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }

@@ -10,7 +10,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Binder
-import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -186,8 +185,7 @@ class SpeechService : Service() {
                 // Update notification
                 val notification = createNotification(isListening)
                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                    ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
                     notificationManager.notify(NOTIFICATION_ID, notification)
                 }
             }

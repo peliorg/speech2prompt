@@ -2,7 +2,6 @@ package com.speech2prompt.util.permissions
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.os.Build
 
 /**
  * Provides user-friendly rationale messages for permission requests.
@@ -55,14 +54,8 @@ object PermissionRationale {
      */
     fun getGroupRationale(group: PermissionGroup): String {
         return when (group) {
-            PermissionGroup.BLUETOOTH -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    "Bluetooth permissions are required to discover and connect to your Speech2Prompt device."
-                } else {
-                    "Location permission is required for Bluetooth scanning on your device's Android version. " +
-                    "This app does not track your location - it's only needed for discovering Bluetooth devices."
-                }
-            }
+            PermissionGroup.BLUETOOTH ->
+                "Bluetooth permissions are required to discover and connect to your Speech2Prompt device."
             
             PermissionGroup.AUDIO ->
                 "Microphone permission is required to capture your voice commands and send them to your computer."

@@ -1,7 +1,6 @@
 package com.speech2prompt.util.permissions
 
 import android.Manifest
-import android.os.Build
 
 /**
  * Represents the status of a single permission.
@@ -50,13 +49,7 @@ data class PermissionState(
      * - API < 31: ACCESS_FINE_LOCATION (required for BLE scanning)
      */
     fun hasBluetoothPermissions(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // API 31+: Check modern Bluetooth permissions
-            bluetooth.values.all { it == PermissionStatus.GRANTED }
-        } else {
-            // API < 31: Location permission is required for BLE scanning
-            location.values.all { it == PermissionStatus.GRANTED }
-        }
+        return bluetooth.values.all { it == PermissionStatus.GRANTED }
     }
     
     /**
@@ -68,7 +61,7 @@ data class PermissionState(
     
     /**
      * Checks if location permissions are granted.
-     * Only required for BLE scanning on API < 31.
+     * Not required for BLE scanning on API 33+, but kept for potential future use.
      */
     fun hasLocationPermission(): Boolean {
         return location.values.all { it == PermissionStatus.GRANTED }
@@ -166,17 +159,10 @@ data class PermissionState(
          * Returns the list of Bluetooth permissions required for the current API level.
          */
         fun getRequiredBluetoothPermissions(): List<String> {
-            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                // API 31+: Modern Bluetooth permissions
-                listOf(
-                    Manifest.permission.BLUETOOTH_SCAN,
-                    Manifest.permission.BLUETOOTH_CONNECT
-                )
-            } else {
-                // API < 31: Legacy Bluetooth permissions (declared but not runtime-required)
-                // Location permission is required instead for BLE scanning
-                emptyList()
-            }
+            return listOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT
+            )
         }
         
         /**
@@ -191,13 +177,8 @@ data class PermissionState(
          * Only required for BLE scanning on API < 31.
          */
         fun getRequiredLocationPermissions(): List<String> {
-            return if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                // API < 31: Location permission required for BLE scanning
-                listOf(Manifest.permission.ACCESS_FINE_LOCATION)
-            } else {
-                // API 31+: Location not required for BLE
-                emptyList()
-            }
+            // Location not required for BLE on API 33+
+            return emptyList()
         }
         
         /**

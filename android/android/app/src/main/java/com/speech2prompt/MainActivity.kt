@@ -4,7 +4,6 @@ import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -79,23 +78,13 @@ class MainActivity : ComponentActivity() {
     private fun MainContent() {
         val navController = rememberNavController()
         
-        // Check for required permissions
+        // Check for required permissions (API 33+)
         val requiredPermissions = remember {
-            buildList {
-                // Bluetooth permissions (API 31+)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    add(Manifest.permission.BLUETOOTH_CONNECT)
-                    add(Manifest.permission.BLUETOOTH_SCAN)
-                }
-                
-                // Location permissions (required for BLE on API < 31)
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                    add(Manifest.permission.ACCESS_FINE_LOCATION)
-                }
-                
-                // Audio recording permission
-                add(Manifest.permission.RECORD_AUDIO)
-            }
+            listOf(
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.RECORD_AUDIO
+            )
         }
         
         var permissionsChecked by remember { mutableStateOf(false) }

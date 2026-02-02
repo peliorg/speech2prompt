@@ -2,22 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Bluetooth permissions -->
-    <uses-permission android:name="android.permission.BLUETOOTH" 
-        android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" 
-        android:maxSdkVersion="30" />
+    <!-- Bluetooth permissions (API 33+ only) -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" 
-        android:usesPermissionFlags="neverForLocation"
-        tools:targetApi="s" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
 
     <!-- Audio permission for recording -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Location permissions (required for BLE scanning on older devices) -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Location permissions removed - not required for BLE on API 33+ -->
 
     <!-- Network permission -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -44,7 +37,7 @@
         android:name="android.hardware.microphone"
         android:required="false" />
 
-    <!-- Speech recognition queries (Android 11+) -->
+    <!-- Speech recognition service discovery -->
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />
@@ -61,8 +54,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Speech2Prompt"
-        android:enableOnBackInvokedCallback="true"
-        tools:targetApi="34">
+        android:enableOnBackInvokedCallback="true">
 
         <activity
             android:name=".MainActivity"

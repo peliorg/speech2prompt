@@ -54,12 +54,12 @@ class SpeechRecognitionManager @Inject constructor(
         private val DEFAULT_PAUSE_FOR = 3.seconds
         private val DEFAULT_LISTEN_FOR = 30.seconds
         
-        // Hybrid restart strategy (Generational Lifecycle)
-        // After MAX_SOFT_CYCLES soft restarts, perform a hard restart to clear memory
-        private const val MAX_SOFT_CYCLES = 50
-        // Safety delay during hard restart to allow OS cleanup (spec: 50-100ms)
+        // Segmented session memory management
+        // After MAX_SEGMENTS, perform a hard restart to clear memory
+        private const val MAX_SEGMENTS_BEFORE_RESTART = 100
+        // Safety delay during hard restart to allow OS cleanup
         private const val HARD_RESTART_SAFETY_DELAY_MS = 100L
-        // Time-based hard restart threshold (in addition to cycle-based)
+        // Time-based hard restart threshold for multi-hour sessions
         private val FULL_RESTART_TIME_THRESHOLD = 30.minutes
     }
     
@@ -81,18 +81,17 @@ class SpeechRecognitionManager @Inject constructor(
     private var restartScheduled = false
     private var restartJob: Job? = null
     
-    // Hybrid restart strategy tracking (Generational Lifecycle)
-    private var softCycleCount = 0
+    // Segmented session tracking for memory management
+    private var segmentCount = 0
     private var lastFullRestartTime: Long = System.currentTimeMillis()
     
-    // Flag to prevent auto-restart when stop was explicitly requested
+    // Flag to prevent restart when stop was explicitly requested
     @Volatile
     private var stopRequested = false
     
-    // Flag to indicate we're in the middle of an auto-restart
-    // This keeps the UI stable (isListening stays true) during seamless restarts
+    // Flag to indicate we're in the middle of a scheduled restart (memory management)
     @Volatile
-    private var isAutoRestarting = false
+    private var isRestarting = false
     
     // Watchdog
     private var watchdogJob: Job? = null
@@ -206,10 +205,10 @@ class SpeechRecognitionManager @Inject constructor(
     suspend fun startListening(isRestart: Boolean = false): Boolean {
         Log.d(TAG, "startListening() called, current state: $recognizerState, isRestart: $isRestart")
         
-        // Clear the stop flag when explicitly starting (not on auto-restart)
+        // Clear the stop flag when explicitly starting (not on restart)
         if (!isRestart) {
             stopRequested = false
-            isAutoRestarting = false
+            isRestarting = false
         }
         
         if (!_isInitialized.value) {
@@ -245,7 +244,7 @@ class SpeechRecognitionManager @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start listening", e)
                 transitionState(RecognizerState.IDLE)
-                handleError(SpeechRecognizer.ERROR_CLIENT)
+                _errorMessage.value = "Failed to start: ${e.message}"
                 return@withContext
             }
         }
@@ -259,9 +258,8 @@ class SpeechRecognitionManager @Inject constructor(
     suspend fun stopListening() {
         Log.d(TAG, "stopListening() called, current state: $recognizerState")
         
-        // Set flag to prevent auto-restart from onResults/onError callbacks
         stopRequested = true
-        isAutoRestarting = false
+        isRestarting = false
         
         cancelScheduledRestart()
         
@@ -286,6 +284,10 @@ class SpeechRecognitionManager @Inject constructor(
             }
             transitionState(RecognizerState.IDLE)
             updateListeningState(false)
+            _soundLevel.value = 0f
+            
+            // Reset segment count on explicit stop
+            segmentCount = 0
         }
     }
     
@@ -352,13 +354,12 @@ class SpeechRecognitionManager @Inject constructor(
         Log.d(TAG, "Setting locale: $localeId")
         _selectedLocale.value = localeId
         
-        // If currently listening, restart with new locale (seamless)
+        // If currently listening, restart with new locale
         if (_isListening.value) {
             serviceScope.launch {
-                isAutoRestarting = true  // Keep UI stable during locale change
-                stopRequested = false  // This is not a user-requested stop
+                isRestarting = true
+                stopRequested = false
                 
-                // Cancel current recognizer
                 withContext(Dispatchers.Main) {
                     try {
                         speechRecognizer?.stopListening()
@@ -446,7 +447,12 @@ class SpeechRecognitionManager @Inject constructor(
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             
-            // Configure silence detection
+            // Enable segmented session for true continuous recognition (API 33+)
+            // Recognition continues until explicitly stopped - no auto-termination on silence
+            putExtra(RecognizerIntent.EXTRA_SEGMENTED_SESSION, true)
+            
+            // Configure silence detection for segment boundaries
+            // These control when a "segment" ends, not when recognition stops
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, pauseFor.inWholeMilliseconds)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, pauseFor.inWholeMilliseconds)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000L)
@@ -454,7 +460,7 @@ class SpeechRecognitionManager @Inject constructor(
     }
     
     private fun createRecognitionListener(): RecognitionListener {
-        return SpeechListener()
+        return SegmentedSpeechListener()
     }
     
     private fun handleResult(results: Bundle?, isFinal: Boolean) {
@@ -504,38 +510,17 @@ class SpeechRecognitionManager @Inject constructor(
         // the user explicitly stops listening.
     }
     
-    private fun handleError(errorCode: Int) {
-        val classification = errorHandler.classify(errorCode)
-        Log.w(TAG, "Speech error: ${classification.message} (code: $errorCode, transient: ${classification.isTransient})")
-        
-        if (classification.isTransient) {
-            // Transient errors - restart without user notification
-            scheduleRestart(wasSuccessful = false, delay = classification.suggestedRetryDelay, errorClassification = classification)
-        } else {
-            // Real errors - notify user and apply backoff
-            consecutiveErrors++
-            _errorMessage.value = classification.message
-            
-            if (consecutiveErrors < MAX_CONSECUTIVE_ERRORS && autoRestart) {
-                val backoffDelay = errorHandler.calculateBackoff(consecutiveErrors)
-                Log.d(TAG, "Scheduling restart with backoff: $backoffDelay")
-                scheduleRestart(wasSuccessful = false, delay = backoffDelay, errorClassification = classification)
-            } else {
-                Log.e(TAG, "Max consecutive errors reached, stopping")
-                serviceScope.launch { stopListening() }
-            }
-        }
-    }
-    
-    private fun scheduleRestart(wasSuccessful: Boolean, delay: Duration = Duration.ZERO, errorClassification: SpeechErrorHandler.ErrorClassification? = null) {
+    /**
+     * Schedule a restart after error or unexpected session end.
+     * With segmented sessions, restarts are only needed for error recovery,
+     * not for continuous listening (which is handled by the session itself).
+     */
+    private fun scheduleRestart(delay: Duration = Duration.ZERO) {
         if (_isPaused.value || !autoRestart || stopRequested) {
             Log.d(TAG, "Restart skipped: paused=${_isPaused.value}, autoRestart=$autoRestart, stopRequested=$stopRequested")
-            // If we're not restarting, clear the flag and update UI
-            if (isAutoRestarting) {
-                isAutoRestarting = false
-                updateListeningState(false)
-                _soundLevel.value = 0f
-            }
+            isRestarting = false
+            updateListeningState(false)
+            _soundLevel.value = 0f
             return
         }
         
@@ -543,12 +528,6 @@ class SpeechRecognitionManager @Inject constructor(
             Log.d(TAG, "Restart already scheduled")
             return
         }
-        
-        // Increment soft cycle counter for generational lifecycle tracking
-        softCycleCount++
-        
-        // Determine if we need a full (hard) restart based on cycle count, time, or error type
-        val needsFullRestart = shouldPerformFullRestart(errorClassification)
         
         restartScheduled = true
         lastRestartAttempt = System.currentTimeMillis()
@@ -562,24 +541,15 @@ class SpeechRecognitionManager @Inject constructor(
             
             restartScheduled = false
             
-            // Re-check stopRequested after delay in case stop was called during wait
             if (!_isPaused.value && autoRestart && !stopRequested) {
-                if (needsFullRestart) {
-                    Log.d(TAG, "Performing HARD restart (generational refresh at cycle $softCycleCount)")
-                    forceFullRestart()  // This resets counters and recreates the recognizer
-                } else {
-                    Log.d(TAG, "Performing SOFT restart (cycle $softCycleCount of $MAX_SOFT_CYCLES)")
-                    transitionState(RecognizerState.IDLE)
-                    startListening(isRestart = true)
-                }
+                Log.d(TAG, "Restarting segmented session")
+                transitionState(RecognizerState.IDLE)
+                startListening(isRestart = true)
             } else {
-                Log.d(TAG, "Restart cancelled: paused=${_isPaused.value}, autoRestart=$autoRestart, stopRequested=$stopRequested")
-                // Restart was cancelled, update UI state
-                if (isAutoRestarting) {
-                    isAutoRestarting = false
-                    updateListeningState(false)
-                    _soundLevel.value = 0f
-                }
+                Log.d(TAG, "Restart cancelled")
+                isRestarting = false
+                updateListeningState(false)
+                _soundLevel.value = 0f
             }
         }
     }
@@ -588,44 +558,46 @@ class SpeechRecognitionManager @Inject constructor(
         restartJob?.cancel()
         restartJob = null
         restartScheduled = false
-        // If we were in the middle of an auto-restart, clear that state
-        if (isAutoRestarting) {
-            isAutoRestarting = false
-            // Note: UI state (isListening) is updated by the caller (stopListening)
-        }
+        isRestarting = false
     }
     
     /**
-     * Determine whether a full (hard) restart is needed based on:
-     * - Soft cycle count threshold (MAX_SOFT_CYCLES)
+     * Determine whether a hard restart is needed for memory management.
+     * With segmented sessions, this is based on:
+     * - Segment count threshold (MAX_SEGMENTS_BEFORE_RESTART)
      * - Time since last full restart (FULL_RESTART_TIME_THRESHOLD)
-     * - Error type (some errors require full restart via requiresFullRestart flag)
-     * 
-     * This implements the "Generational Lifecycle" strategy from the spec:
-     * - Most restarts are "soft" (reuse instance) for minimal latency
-     * - Periodic "hard" restarts (recreate instance) prevent memory accumulation
      */
-    private fun shouldPerformFullRestart(errorClassification: SpeechErrorHandler.ErrorClassification? = null): Boolean {
-        // Spec: Force hard restart when soft cycle limit reached
-        if (softCycleCount >= MAX_SOFT_CYCLES) {
-            Log.d(TAG, "Full restart needed: soft cycle limit reached ($softCycleCount >= $MAX_SOFT_CYCLES)")
+    private fun shouldPerformHardRestart(): Boolean {
+        // Segment count threshold
+        if (segmentCount >= MAX_SEGMENTS_BEFORE_RESTART) {
+            Log.d(TAG, "Hard restart needed: segment limit reached ($segmentCount >= $MAX_SEGMENTS_BEFORE_RESTART)")
             return true
         }
         
-        // Time-based full restart for extra stability in multi-hour sessions
+        // Time-based threshold for multi-hour sessions
         val timeSinceLastFullRestart = System.currentTimeMillis() - lastFullRestartTime
         if (timeSinceLastFullRestart > FULL_RESTART_TIME_THRESHOLD.inWholeMilliseconds) {
-            Log.d(TAG, "Full restart needed: time threshold exceeded (${timeSinceLastFullRestart}ms > ${FULL_RESTART_TIME_THRESHOLD.inWholeMilliseconds}ms)")
-            return true
-        }
-        
-        // Spec: Fail-safe fallback - force hard restart on specific errors
-        if (errorClassification?.requiresFullRestart == true) {
-            Log.d(TAG, "Full restart needed: error type requires it (code: ${errorClassification.code})")
+            Log.d(TAG, "Hard restart needed: time threshold exceeded (${timeSinceLastFullRestart}ms)")
             return true
         }
         
         return false
+    }
+    
+    /**
+     * Schedule a hard restart for memory management.
+     * This stops the current session and recreates the recognizer.
+     */
+    private fun scheduleHardRestart() {
+        if (_isPaused.value || stopRequested) {
+            return
+        }
+        
+        restartJob?.cancel()
+        restartJob = serviceScope.launch {
+            isRestarting = true
+            forceFullRestart()
+        }
     }
     
     private fun startWatchdog() {
@@ -668,25 +640,22 @@ class SpeechRecognitionManager @Inject constructor(
         }
     }
     
+    /**
+     * Force a full restart by destroying and recreating the recognizer.
+     * This clears any accumulated memory and resets all counters.
+     */
     private suspend fun forceFullRestart() {
-        Log.d(TAG, "Force full restart initiated (cycle count was: $softCycleCount)")
+        Log.d(TAG, "Force full restart initiated (segment count was: $segmentCount)")
         
-        // Don't restart if stop was explicitly requested
         if (stopRequested) {
             Log.d(TAG, "Force restart skipped - stop was requested")
-            if (isAutoRestarting) {
-                isAutoRestarting = false
-                updateListeningState(false)
-                _soundLevel.value = 0f
-            }
+            isRestarting = false
+            updateListeningState(false)
+            _soundLevel.value = 0f
             return
         }
         
-        // Set flag to keep UI stable during restart
         val wasListening = _isListening.value
-        if (wasListening) {
-            isAutoRestarting = true
-        }
         
         withContext(Dispatchers.Main) {
             try {
@@ -694,7 +663,7 @@ class SpeechRecognitionManager @Inject constructor(
                 speechRecognizer?.cancel()
                 speechRecognizer?.destroy()
                 
-                // Safety delay: Allow OS time for garbage collection and hardware unlock (spec: 50-100ms)
+                // Safety delay for OS cleanup
                 delay(HARD_RESTART_SAFETY_DELAY_MS)
                 
                 // Create new recognizer
@@ -702,29 +671,25 @@ class SpeechRecognitionManager @Inject constructor(
                     setRecognitionListener(createRecognitionListener())
                 }
                 
-                // Reset lifecycle counters for the new generation
-                softCycleCount = 0
+                // Reset counters for the new recognizer instance
+                segmentCount = 0
                 lastFullRestartTime = System.currentTimeMillis()
                 consecutiveErrors = 0
-                Log.d(TAG, "Lifecycle counters reset for new recognizer generation")
+                Log.d(TAG, "Counters reset for new recognizer instance")
                 
                 transitionState(RecognizerState.IDLE)
                 
-                // Restart if needed (and stop wasn't requested)
                 if (!_isPaused.value && autoRestart && !stopRequested) {
                     startListening(isRestart = wasListening)
                 } else {
-                    // Not restarting, update UI
-                    if (isAutoRestarting) {
-                        isAutoRestarting = false
-                        updateListeningState(false)
-                        _soundLevel.value = 0f
-                    }
+                    isRestarting = false
+                    updateListeningState(false)
+                    _soundLevel.value = 0f
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error during force restart", e)
                 _errorMessage.value = "Failed to restart: ${e.message}"
-                isAutoRestarting = false
+                isRestarting = false
                 updateListeningState(false)
             }
         }
@@ -754,14 +719,22 @@ class SpeechRecognitionManager @Inject constructor(
     
     // ==================== Recognition Listener ====================
     
-    private inner class SpeechListener : RecognitionListener {
+    /**
+     * Speech listener with segmented session support.
+     * 
+     * With EXTRA_SEGMENTED_SESSION enabled:
+     * - onSegmentResults() is called for each segment (replaces onResults() for segments)
+     * - onEndOfSegmentedSession() is called when recognition ends (stop requested or error)
+     * - Recognition continues automatically between segments (no restart needed)
+     * - onResults() may still be called in some cases (device-dependent)
+     */
+    private inner class SegmentedSpeechListener : RecognitionListener {
         
         override fun onReadyForSpeech(params: Bundle?) {
             Log.d(TAG, "onReadyForSpeech")
             transitionState(RecognizerState.LISTENING)
             updateListeningState(true)
-            // Clear auto-restart flag now that we're successfully listening again
-            isAutoRestarting = false
+            isRestarting = false
             lastSuccessfulListening = System.currentTimeMillis()
             _errorMessage.value = null
         }
@@ -771,8 +744,7 @@ class SpeechRecognitionManager @Inject constructor(
         }
         
         override fun onRmsChanged(rmsdB: Float) {
-            // Convert dB to 0-1 range
-            // rmsdB typically ranges from -2 to 10
+            // Convert dB to 0-1 range (rmsdB typically ranges from -2 to 10)
             val normalized = ((rmsdB + 2) / 12).coerceIn(0f, 1f)
             _soundLevel.value = normalized
         }
@@ -782,59 +754,104 @@ class SpeechRecognitionManager @Inject constructor(
         }
         
         override fun onEndOfSpeech() {
-            Log.d(TAG, "onEndOfSpeech")
+            // With segmented sessions, this is called at the end of each segment
+            // Recognition continues automatically - no action needed
+            Log.d(TAG, "onEndOfSpeech (segment boundary)")
         }
         
         override fun onError(error: Int) {
             Log.w(TAG, "onError: $error")
             
-            // Determine if we'll auto-restart BEFORE changing any state
             val classification = errorHandler.classify(error)
-            val willAutoRestart = !stopRequested && !_isPaused.value && autoRestart && 
-                (classification.isTransient || consecutiveErrors < MAX_CONSECUTIVE_ERRORS)
             
-            if (willAutoRestart) {
-                // Set flag to keep UI stable during restart
-                isAutoRestarting = true
-                Log.d(TAG, "Will auto-restart, keeping isListening=true for seamless UI")
-            }
-            
+            // With segmented sessions, most errors end the session
+            // We need to restart if autoRestart is enabled
             transitionState(RecognizerState.IDLE)
             
-            // Only update UI listening state if we're NOT auto-restarting
-            // This prevents button flickering during seamless restarts
-            if (!willAutoRestart) {
+            if (classification.isTransient && !stopRequested && autoRestart) {
+                // Transient error during segmented session - restart
+                Log.d(TAG, "Transient error in segmented session, will restart")
+                isRestarting = true
+                scheduleRestart(delay = classification.suggestedRetryDelay)
+            } else if (!classification.isTransient) {
+                // Real error - notify user
+                consecutiveErrors++
+                _errorMessage.value = classification.message
+                
+                if (consecutiveErrors < MAX_CONSECUTIVE_ERRORS && autoRestart && !stopRequested) {
+                    val backoffDelay = errorHandler.calculateBackoff(consecutiveErrors)
+                    Log.d(TAG, "Error with backoff restart: $backoffDelay")
+                    isRestarting = true
+                    scheduleRestart(delay = backoffDelay)
+                } else {
+                    Log.e(TAG, "Max consecutive errors or stop requested, stopping")
+                    updateListeningState(false)
+                    _soundLevel.value = 0f
+                }
+            } else {
+                // Stop was requested
                 updateListeningState(false)
                 _soundLevel.value = 0f
             }
-            // Note: soundLevel may briefly show 0 during restart, but that's less jarring
-            // than the button changing. The visualizer will resume when listening restarts.
-            
-            handleError(error)
         }
         
-        override fun onResults(results: Bundle?) {
-            Log.d(TAG, "onResults")
+        /**
+         * Called when a segment completes in segmented session mode.
+         * Recognition continues automatically after this.
+         */
+        override fun onSegmentResults(results: Bundle) {
+            Log.d(TAG, "onSegmentResults (segment #$segmentCount)")
             handleResult(results, isFinal = true)
             
-            // Determine if we'll auto-restart BEFORE changing any state
-            val willAutoRestart = !stopRequested && !_isPaused.value && autoRestart
+            // Increment segment counter for memory management
+            segmentCount++
+            consecutiveErrors = 0  // Reset error counter on successful segment
+            lastSuccessfulListening = System.currentTimeMillis()
             
-            if (willAutoRestart) {
-                // Set flag to keep UI stable during restart
-                isAutoRestarting = true
-                Log.d(TAG, "Will auto-restart after results, keeping isListening=true")
+            // Check if we need a hard restart for memory management
+            if (shouldPerformHardRestart()) {
+                Log.d(TAG, "Scheduling hard restart for memory management (segments: $segmentCount)")
+                scheduleHardRestart()
             }
             
+            // Note: Recognition continues automatically with segmented sessions
+            // No restart needed here
+        }
+        
+        /**
+         * Called when the segmented session ends.
+         * This happens when stopListening() is called or on certain errors.
+         */
+        override fun onEndOfSegmentedSession() {
+            Log.d(TAG, "onEndOfSegmentedSession (total segments: $segmentCount)")
             transitionState(RecognizerState.IDLE)
             
-            // Only update UI listening state if we're NOT auto-restarting
-            if (!willAutoRestart) {
+            if (!stopRequested && autoRestart && !isRestarting) {
+                // Session ended unexpectedly, restart
+                Log.d(TAG, "Segmented session ended unexpectedly, will restart")
+                isRestarting = true
+                scheduleRestart(delay = 100.milliseconds)
+            } else {
                 updateListeningState(false)
+                _soundLevel.value = 0f
             }
+        }
+        
+        /**
+         * Legacy callback - may still be called on some devices.
+         * Treat as segment result for compatibility.
+         */
+        override fun onResults(results: Bundle?) {
+            Log.d(TAG, "onResults (legacy callback)")
+            results?.let { handleResult(it, isFinal = true) }
             
-            // Auto-restart for continuous listening
-            scheduleRestart(wasSuccessful = true)
+            // In segmented mode, this shouldn't normally be called
+            // but handle it gracefully if it is
+            if (!stopRequested && autoRestart) {
+                transitionState(RecognizerState.IDLE)
+                isRestarting = true
+                scheduleRestart(delay = Duration.ZERO)
+            }
         }
         
         override fun onPartialResults(partialResults: Bundle?) {
