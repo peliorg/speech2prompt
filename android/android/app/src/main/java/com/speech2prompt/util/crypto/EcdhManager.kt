@@ -1,9 +1,8 @@
 package com.speech2prompt.util.crypto
 
-import android.os.Build
 import android.util.Base64
 import android.util.Log
-import org.bouncycastle.jce.provider.BouncyCastleProvider
+
 import java.security.*
 import java.security.spec.X509EncodedKeySpec
 import javax.crypto.KeyAgreement
@@ -12,9 +11,7 @@ import javax.inject.Singleton
 
 /**
  * ECDH key exchange manager using X25519.
- * 
- * On API 33+, uses native X25519 support.
- * On older APIs, uses BouncyCastle provider.
+ * Uses native Android X25519 support (API 33+).
  */
 @Singleton
 class EcdhManager @Inject constructor() {
@@ -34,14 +31,6 @@ class EcdhManager @Inject constructor() {
         private val X25519_PUBLIC_KEY_PREFIX = byteArrayOf(
             0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x6e, 0x03, 0x21, 0x00
         )
-        
-        init {
-            // Register BouncyCastle provider if not already registered
-            if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-                Security.addProvider(BouncyCastleProvider())
-                Log.d(TAG, "BouncyCastle provider registered")
-            }
-        }
     }
 
     /**
@@ -51,21 +40,15 @@ class EcdhManager @Inject constructor() {
      */
     fun generateKeyPair(): Result<KeyPair> {
         return try {
-            Log.d(TAG, "Generating X25519 keypair (API ${Build.VERSION.SDK_INT})")
+            Log.d(TAG, "Generating X25519 keypair")
             
-            val keyPairGenerator = if (Build.VERSION.SDK_INT >= 33) {
-                try {
-                    KeyPairGenerator.getInstance(KEY_ALGORITHM_X25519)
-                } catch (e: NoSuchAlgorithmException) {
-                    // Fallback to XDH
-                    KeyPairGenerator.getInstance(KEY_ALGORITHM_XDH)
-                }
-            } else {
-                // Use BouncyCastle for older APIs
-                KeyPairGenerator.getInstance(KEY_ALGORITHM_X25519, BouncyCastleProvider.PROVIDER_NAME)
+            val keyPairGenerator = try {
+                KeyPairGenerator.getInstance(KEY_ALGORITHM_X25519)
+            } catch (e: NoSuchAlgorithmException) {
+                // Fallback to XDH algorithm name
+                KeyPairGenerator.getInstance(KEY_ALGORITHM_XDH)
             }
             
-            // X25519 has fixed key size, no initialization needed
             val keyPair = keyPairGenerator.generateKeyPair()
             Log.d(TAG, "Successfully generated X25519 keypair")
             Result.success(keyPair)
@@ -132,24 +115,16 @@ class EcdhManager @Inject constructor() {
             // Wrap raw key in SubjectPublicKeyInfo format for Java
             val peerEncoded = X25519_PUBLIC_KEY_PREFIX + peerRawKey
             
-            val keyFactory = if (Build.VERSION.SDK_INT >= 33) {
-                try {
-                    KeyFactory.getInstance(KEY_ALGORITHM_X25519)
-                } catch (e: NoSuchAlgorithmException) {
-                    KeyFactory.getInstance(KEY_ALGORITHM_XDH)
-                }
-            } else {
-                KeyFactory.getInstance(KEY_ALGORITHM_X25519, BouncyCastleProvider.PROVIDER_NAME)
+            val keyFactory = try {
+                KeyFactory.getInstance(KEY_ALGORITHM_X25519)
+            } catch (e: NoSuchAlgorithmException) {
+                KeyFactory.getInstance(KEY_ALGORITHM_XDH)
             }
             
             val peerPublicKey = keyFactory.generatePublic(X509EncodedKeySpec(peerEncoded))
 
             // Perform ECDH key agreement
-            val keyAgreement = if (Build.VERSION.SDK_INT >= 33) {
-                KeyAgreement.getInstance(KEY_AGREEMENT_ALGORITHM)
-            } else {
-                KeyAgreement.getInstance(KEY_ALGORITHM_X25519, BouncyCastleProvider.PROVIDER_NAME)
-            }
+            val keyAgreement = KeyAgreement.getInstance(KEY_AGREEMENT_ALGORITHM)
             
             keyAgreement.init(myKeyPair.private)
             keyAgreement.doPhase(peerPublicKey, true)

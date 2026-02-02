@@ -22,7 +22,7 @@ android {
 
     defaultConfig {
         applicationId = "com.speech2prompt"
-        minSdk = 26
+        minSdk = 33
         targetSdk = 35
         versionCode = 7
         versionName = "0.6.0"
@@ -141,8 +141,7 @@ dependencies {
     // Networking
     implementation(libs.bundles.networking)
 
-    // ECDH Key Exchange (X25519 support for API < 33)
-    implementation(libs.bouncycastle)
+    // X25519 ECDH now uses native Android support (API 33+)
 
     // Unit Testing
     testImplementation(libs.bundles.testing.unit)
