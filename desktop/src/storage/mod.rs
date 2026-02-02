@@ -15,8 +15,9 @@
 //! Storage module for history and secure storage.
 
 mod history;
-mod secure;
 mod voice_commands;
 
-pub use history::{EntryType, History, HistoryEntry};
+pub use history::History;
+#[allow(unused_imports)]
+pub use history::{EntryType, HistoryEntry};
 pub use voice_commands::{CommandInfo, VoiceCommandStore};

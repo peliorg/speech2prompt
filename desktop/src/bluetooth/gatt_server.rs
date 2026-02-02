@@ -48,6 +48,7 @@ pub enum ConnectionEvent {
     /// Connection established.
     Connected { device_name: String },
     /// Connection closed.
+    #[allow(dead_code)]
     Disconnected,
     /// Pairing requested.
     PairRequested { 
@@ -55,6 +56,7 @@ pub enum ConnectionEvent {
         device_name: Option<String>,
     },
     /// Error occurred.
+    #[allow(dead_code)]
     Error(String),
 }
 
@@ -150,11 +152,13 @@ impl GattServer {
     }
 
     /// Get the Linux device ID.
+    #[allow(dead_code)]
     pub fn device_id(&self) -> &str {
         &self.linux_device_id
     }
 
     /// Get the adapter address.
+    #[allow(dead_code)]
     pub async fn address(&self) -> Result<Address> {
         Ok(self.adapter.address().await?)
     }
@@ -715,6 +719,7 @@ impl GattServer {
     }
 
     /// Send a notification (for testing or manual responses).
+    #[allow(dead_code)]
     pub async fn send_notification(&self, data: Vec<u8>) -> Result<()> {
         let tx_guard = self.response_tx.lock().await;
         if let Some(ref tx) = *tx_guard {

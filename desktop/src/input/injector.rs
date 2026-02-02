@@ -134,6 +134,7 @@ pub fn create_injector_with_preference(preference: &str) -> Result<Box<dyn Input
 }
 
 /// Stub injector for testing without display server.
+#[allow(dead_code)]
 pub struct StubInjector;
 
 impl InputInjector for StubInjector {

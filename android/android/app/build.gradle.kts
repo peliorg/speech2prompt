@@ -87,6 +87,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "/META-INF/INDEX.LIST"
             excludes += "/META-INF/DEPENDENCIES"
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
     }
 
@@ -135,7 +136,7 @@ dependencies {
     implementation(libs.bundles.networking)
 
     // ECDH Key Exchange (X25519 support for API < 33)
-    implementation("org.bouncycastle:bcprov-jdk18on:1.77")
+    implementation(libs.bouncycastle)
 
     // Unit Testing
     testImplementation(libs.bundles.testing.unit)

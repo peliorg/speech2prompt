@@ -22,6 +22,7 @@ use std::sync::{Arc, Mutex};
 use tracing::info;
 
 /// A single history entry.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct HistoryEntry {
     pub id: i64,
@@ -46,6 +47,7 @@ impl EntryType {
         }
     }
 
+    #[allow(dead_code)]
     fn from_str(s: &str) -> Self {
         match s {
             "COMMAND" => EntryType::Command,
@@ -94,6 +96,7 @@ impl History {
     }
 
     /// Set maximum number of entries to keep.
+    #[allow(dead_code)]
     pub fn set_max_entries(&mut self, max: u32) {
         self.max_entries = max;
     }
@@ -130,6 +133,7 @@ impl History {
     }
 
     /// Get recent history entries.
+    #[allow(dead_code)]
     pub fn get_recent(&self, limit: u32) -> Result<Vec<HistoryEntry>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
@@ -158,6 +162,7 @@ impl History {
     }
 
     /// Search history by content.
+    #[allow(dead_code)]
     pub fn search(&self, query: &str, limit: u32) -> Result<Vec<HistoryEntry>> {
         let conn = self.conn.lock().unwrap();
         let pattern = format!("%{}%", query);
@@ -188,6 +193,7 @@ impl History {
     }
 
     /// Export history to text file.
+    #[allow(dead_code)]
     pub fn export(&self, path: &Path) -> Result<()> {
         let entries = self.get_recent(self.max_entries)?;
         let mut content = String::new();
@@ -211,6 +217,7 @@ impl History {
     }
 
     /// Clear all history.
+    #[allow(dead_code)]
     pub fn clear(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute("DELETE FROM history", [])?;
@@ -219,6 +226,7 @@ impl History {
     }
 
     /// Get total entry count.
+    #[allow(dead_code)]
     pub fn count(&self) -> Result<u32> {
         let conn = self.conn.lock().unwrap();
         let count: u32 = conn.query_row("SELECT COUNT(*) FROM history", [], |row| row.get(0))?;

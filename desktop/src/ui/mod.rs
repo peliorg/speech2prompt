@@ -15,7 +15,6 @@
 //! UI module for system tray and windows.
 
 mod confirmation_dialog;
-mod history_window;
 mod manage_commands;
 mod tray;
 

@@ -117,6 +117,7 @@ impl Config {
     }
 
     /// Save configuration to file.
+    #[allow(dead_code)]
     pub fn save(&self) -> Result<()> {
         let config_dir = dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
