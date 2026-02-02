@@ -21,6 +21,7 @@ import javax.inject.Singleton
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Manages Android SpeechRecognizer with state machine, error recovery, and auto-restart.
@@ -52,6 +53,14 @@ class SpeechRecognitionManager @Inject constructor(
         // Default listening configuration
         private val DEFAULT_PAUSE_FOR = 3.seconds
         private val DEFAULT_LISTEN_FOR = 30.seconds
+        
+        // Hybrid restart strategy (Generational Lifecycle)
+        // After MAX_SOFT_CYCLES soft restarts, perform a hard restart to clear memory
+        private const val MAX_SOFT_CYCLES = 50
+        // Safety delay during hard restart to allow OS cleanup (spec: 50-100ms)
+        private const val HARD_RESTART_SAFETY_DELAY_MS = 100L
+        // Time-based hard restart threshold (in addition to cycle-based)
+        private val FULL_RESTART_TIME_THRESHOLD = 30.minutes
     }
     
     // Speech recognizer - created lazily on main thread
@@ -71,6 +80,10 @@ class SpeechRecognitionManager @Inject constructor(
     private var lastRestartAttempt: Long? = null
     private var restartScheduled = false
     private var restartJob: Job? = null
+    
+    // Hybrid restart strategy tracking (Generational Lifecycle)
+    private var softCycleCount = 0
+    private var lastFullRestartTime: Long = System.currentTimeMillis()
     
     // Flag to prevent auto-restart when stop was explicitly requested
     @Volatile
@@ -497,7 +510,7 @@ class SpeechRecognitionManager @Inject constructor(
         
         if (classification.isTransient) {
             // Transient errors - restart without user notification
-            scheduleRestart(wasSuccessful = false, delay = classification.suggestedRetryDelay)
+            scheduleRestart(wasSuccessful = false, delay = classification.suggestedRetryDelay, errorClassification = classification)
         } else {
             // Real errors - notify user and apply backoff
             consecutiveErrors++
@@ -506,7 +519,7 @@ class SpeechRecognitionManager @Inject constructor(
             if (consecutiveErrors < MAX_CONSECUTIVE_ERRORS && autoRestart) {
                 val backoffDelay = errorHandler.calculateBackoff(consecutiveErrors)
                 Log.d(TAG, "Scheduling restart with backoff: $backoffDelay")
-                scheduleRestart(wasSuccessful = false, delay = backoffDelay)
+                scheduleRestart(wasSuccessful = false, delay = backoffDelay, errorClassification = classification)
             } else {
                 Log.e(TAG, "Max consecutive errors reached, stopping")
                 serviceScope.launch { stopListening() }
@@ -514,7 +527,7 @@ class SpeechRecognitionManager @Inject constructor(
         }
     }
     
-    private fun scheduleRestart(wasSuccessful: Boolean, delay: Duration = Duration.ZERO) {
+    private fun scheduleRestart(wasSuccessful: Boolean, delay: Duration = Duration.ZERO, errorClassification: SpeechErrorHandler.ErrorClassification? = null) {
         if (_isPaused.value || !autoRestart || stopRequested) {
             Log.d(TAG, "Restart skipped: paused=${_isPaused.value}, autoRestart=$autoRestart, stopRequested=$stopRequested")
             // If we're not restarting, clear the flag and update UI
@@ -531,6 +544,12 @@ class SpeechRecognitionManager @Inject constructor(
             return
         }
         
+        // Increment soft cycle counter for generational lifecycle tracking
+        softCycleCount++
+        
+        // Determine if we need a full (hard) restart based on cycle count, time, or error type
+        val needsFullRestart = shouldPerformFullRestart(errorClassification)
+        
         restartScheduled = true
         lastRestartAttempt = System.currentTimeMillis()
         
@@ -545,11 +564,14 @@ class SpeechRecognitionManager @Inject constructor(
             
             // Re-check stopRequested after delay in case stop was called during wait
             if (!_isPaused.value && autoRestart && !stopRequested) {
-                Log.d(TAG, "Auto-restarting recognition (seamless)")
-                transitionState(RecognizerState.IDLE)
-                // Pass isRestart=true to indicate this is an auto-restart
-                // This keeps UI stable (isListening stays true)
-                startListening(isRestart = true)
+                if (needsFullRestart) {
+                    Log.d(TAG, "Performing HARD restart (generational refresh at cycle $softCycleCount)")
+                    forceFullRestart()  // This resets counters and recreates the recognizer
+                } else {
+                    Log.d(TAG, "Performing SOFT restart (cycle $softCycleCount of $MAX_SOFT_CYCLES)")
+                    transitionState(RecognizerState.IDLE)
+                    startListening(isRestart = true)
+                }
             } else {
                 Log.d(TAG, "Restart cancelled: paused=${_isPaused.value}, autoRestart=$autoRestart, stopRequested=$stopRequested")
                 // Restart was cancelled, update UI state
@@ -571,6 +593,39 @@ class SpeechRecognitionManager @Inject constructor(
             isAutoRestarting = false
             // Note: UI state (isListening) is updated by the caller (stopListening)
         }
+    }
+    
+    /**
+     * Determine whether a full (hard) restart is needed based on:
+     * - Soft cycle count threshold (MAX_SOFT_CYCLES)
+     * - Time since last full restart (FULL_RESTART_TIME_THRESHOLD)
+     * - Error type (some errors require full restart via requiresFullRestart flag)
+     * 
+     * This implements the "Generational Lifecycle" strategy from the spec:
+     * - Most restarts are "soft" (reuse instance) for minimal latency
+     * - Periodic "hard" restarts (recreate instance) prevent memory accumulation
+     */
+    private fun shouldPerformFullRestart(errorClassification: SpeechErrorHandler.ErrorClassification? = null): Boolean {
+        // Spec: Force hard restart when soft cycle limit reached
+        if (softCycleCount >= MAX_SOFT_CYCLES) {
+            Log.d(TAG, "Full restart needed: soft cycle limit reached ($softCycleCount >= $MAX_SOFT_CYCLES)")
+            return true
+        }
+        
+        // Time-based full restart for extra stability in multi-hour sessions
+        val timeSinceLastFullRestart = System.currentTimeMillis() - lastFullRestartTime
+        if (timeSinceLastFullRestart > FULL_RESTART_TIME_THRESHOLD.inWholeMilliseconds) {
+            Log.d(TAG, "Full restart needed: time threshold exceeded (${timeSinceLastFullRestart}ms > ${FULL_RESTART_TIME_THRESHOLD.inWholeMilliseconds}ms)")
+            return true
+        }
+        
+        // Spec: Fail-safe fallback - force hard restart on specific errors
+        if (errorClassification?.requiresFullRestart == true) {
+            Log.d(TAG, "Full restart needed: error type requires it (code: ${errorClassification.code})")
+            return true
+        }
+        
+        return false
     }
     
     private fun startWatchdog() {
@@ -614,7 +669,7 @@ class SpeechRecognitionManager @Inject constructor(
     }
     
     private suspend fun forceFullRestart() {
-        Log.d(TAG, "Force full restart initiated")
+        Log.d(TAG, "Force full restart initiated (cycle count was: $softCycleCount)")
         
         // Don't restart if stop was explicitly requested
         if (stopRequested) {
@@ -639,16 +694,24 @@ class SpeechRecognitionManager @Inject constructor(
                 speechRecognizer?.cancel()
                 speechRecognizer?.destroy()
                 
+                // Safety delay: Allow OS time for garbage collection and hardware unlock (spec: 50-100ms)
+                delay(HARD_RESTART_SAFETY_DELAY_MS)
+                
                 // Create new recognizer
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
                     setRecognitionListener(createRecognitionListener())
                 }
                 
+                // Reset lifecycle counters for the new generation
+                softCycleCount = 0
+                lastFullRestartTime = System.currentTimeMillis()
+                consecutiveErrors = 0
+                Log.d(TAG, "Lifecycle counters reset for new recognizer generation")
+                
                 transitionState(RecognizerState.IDLE)
                 
                 // Restart if needed (and stop wasn't requested)
                 if (!_isPaused.value && autoRestart && !stopRequested) {
-                    delay(500.milliseconds)
                     startListening(isRestart = wasListening)
                 } else {
                     // Not restarting, update UI
