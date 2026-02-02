@@ -1,6 +1,6 @@
 [package]
 name = "speech2prompt-desktop"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 authors = ["Speech2Prompt Team"]
 description = "Linux desktop companion for Speech2Prompt voice-to-keyboard bridge"
