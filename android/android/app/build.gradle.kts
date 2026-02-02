@@ -97,6 +97,12 @@ android {
             isReturnDefaultValues = true
         }
     }
+
+    lint {
+        // Disable lint check that crashes with certain Kotlin/Compose versions
+        // See: https://issuetracker.google.com/issues/
+        disable += "NullSafeMutableLiveData"
+    }
 }
 
 dependencies {
