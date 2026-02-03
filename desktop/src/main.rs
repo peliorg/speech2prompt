@@ -198,11 +198,6 @@ async fn main() -> Result<()> {
         }
     });
 
-    // Start system tray
-    let (mut action_rx, tray_handle) = ui::run_tray(state.clone())?;
-    
-    info!("Ready. System tray active.");
-
     // Handle tray actions and pairing requests
     // Use a short timeout to ensure GTK events are processed regularly
     let gtk_poll_interval = tokio::time::Duration::from_millis(10);
@@ -274,9 +269,6 @@ async fn main() -> Result<()> {
                         } else {
                             warn!("Voice command store not available");
                         }
-                    }
-                    ui::TrayAction::ShowSettings => {
-                        info!("Settings requested");
                     }
                     ui::TrayAction::Quit => {
                         info!("Quit requested");

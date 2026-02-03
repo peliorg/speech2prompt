@@ -7,11 +7,9 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.speech2prompt.presentation.screens.bluetooth_test.BluetoothTestScreen
 import com.speech2prompt.presentation.screens.connection.ConnectionScreen
 import com.speech2prompt.presentation.screens.home.HomeScreen
 import com.speech2prompt.presentation.screens.settings.SettingsScreen
-import com.speech2prompt.presentation.screens.speech_test.SpeechTestScreen
 
 /**
  * Main navigation graph for the Speech2Prompt app
@@ -52,23 +50,6 @@ fun NavGraph(
                 viewModel = hiltViewModel()
             )
         }
-        
-        // Speech Test Screen - Test speech recognition
-        composable(Screen.SpeechTest.route) {
-            SpeechTestScreen(
-                onNavigateBack = { navController.popBackStack() },
-                viewModel = hiltViewModel()
-            )
-        }
-        
-        // Bluetooth Test Screen - Test BLE connection
-        composable(Screen.BluetoothTest.route) {
-            BluetoothTestScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToConnection = { navController.navigateToConnection() },
-                viewModel = hiltViewModel()
-            )
-        }
     }
 }
 
@@ -87,20 +68,4 @@ fun NavHostController.navigateToConnection() {
 
 fun NavHostController.navigateToSettings() {
     navigate(Screen.Settings.route)
-}
-
-fun NavHostController.navigateToSpeechTest() {
-    navigate(Screen.SpeechTest.route)
-}
-
-fun NavHostController.navigateToBluetoothTest() {
-    navigate(Screen.BluetoothTest.route)
-}
-
-fun NavHostController.navigateToHistory() {
-    navigate(Screen.History.route)
-}
-
-fun NavHostController.navigateToPermissions() {
-    navigate(Screen.Permissions.route)
 }

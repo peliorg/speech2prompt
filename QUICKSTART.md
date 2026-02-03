@@ -211,17 +211,12 @@ Try these voice commands while dictating:
 
 | Say This | What Happens |
 |----------|-------------|
-| "new line", "enter", or "new paragraph" | Inserts a new line (Enter key) |
-| "go back" or "backspace" | Deletes previous character (Backspace key) |
+| "enter" | Inserts a new line (Enter key) |
 | "select all" | Selects all text (Ctrl+A) |
-| "copy" or "copy that" | Copies selected text (Ctrl+C) |
-| "paste" or "paste that" | Pastes clipboard (Ctrl+V) |
-| "cut" or "cut that" | Cuts selected text (Ctrl+X) |
+| "copy" | Copies selected text (Ctrl+C) |
+| "paste" | Pastes clipboard (Ctrl+V) |
+| "cut" | Cuts selected text (Ctrl+X) |
 | "cancel" | Discards the current text buffer |
-
-You can also say:
-- "stop listening" - Stops speech recognition
-- "start listening" - Resumes speech recognition
 
 Voice commands can be customized in `~/.config/speech2prompt/voice_commands.json`.
 
@@ -312,11 +307,11 @@ If you can't see the tray icon, you can still use the app - just control it via 
 4. Say "new line" - cursor moves to next line
 5. Say "paste" - text is pasted
 
-### View History
+### View Tray Menu
 
 1. Click the system tray icon on your desktop
-2. Select "Show History"
-3. Browse your dictation history
+2. Toggle "Input Enabled/Disabled" to control text injection
+3. Select "Manage Commands..." to customize voice commands
 
 ### Test Connection Stability
 
@@ -339,7 +334,7 @@ If you can't see the tray icon, you can still use the app - just control it via 
 Both devices encrypt all communication with AES-256-GCM. To verify:
 ```bash
 # Check the desktop logs for encryption messages:
-grep "Encrypted" ~/.local/share/speech2prompt/logs/*
+RUST_LOG=debug speech2prompt-desktop 2>&1 | grep -i encrypt
 ```
 
 ### Test with Different Applications
@@ -377,7 +372,7 @@ Once everything works:
 If you encounter issues:
 
 1. Check the terminal output for error messages
-2. Review the logs: `~/.local/share/speech2prompt/logs/`
+2. Run with debug logging: `RUST_LOG=debug speech2prompt-desktop`
 3. Check Android logcat: `adb logcat | grep Speech2Prompt`
 4. Read the troubleshooting section above
 5. Check the GitHub issues

@@ -4,11 +4,6 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 
 /**
- * Speech2Prompt BLE service UUID
- */
-const val S2P_SERVICE_UUID = "12345678-1234-5678-1234-56789abcdef0"
-
-/**
  * BLE device information for scanning and display
  */
 data class BleDeviceInfo(

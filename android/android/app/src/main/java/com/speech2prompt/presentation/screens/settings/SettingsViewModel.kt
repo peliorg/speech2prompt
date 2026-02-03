@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.speech2prompt.data.model.PairedDevice
 import com.speech2prompt.data.repository.PreferencesRepository
-import com.speech2prompt.service.ble.BleManager
+
 import com.speech2prompt.service.speech.SpeechRecognitionManager
 import com.speech2prompt.util.crypto.SecureStorageManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,7 +26,6 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val speechRecognitionManager: SpeechRecognitionManager,
-    private val bleManager: BleManager,
     private val secureStorage: SecureStorageManager
 ) : ViewModel() {
     

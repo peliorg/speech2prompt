@@ -7,11 +7,10 @@ A voice-to-keyboard bridge that lets you dictate text directly into any applicat
 ## Features
 
 - **Seamless Dictation**: Speak on your phone, text appears at cursor on your PC
-- **Voice Commands**: Control your desktop with commands like "new line", "select all", "copy"
+- **Voice Commands**: Control your desktop with commands like "enter", "select all", "copy"
 - **Secure Connection**: AES-256 encrypted Bluetooth Low Energy (BLE) communication
 - **Works Everywhere**: Types into any application - IDEs, browsers, terminals
 - **Low Latency**: Direct BLE connection, no internet required
-- **History Log**: Searchable history of all dictated text
 
 ## Components
 
@@ -51,14 +50,15 @@ speech2prompt-desktop
 
 ## Voice Commands
 
+Default voice commands:
+
 | Say | Action |
 |-----|--------|
-| "new line", "enter", "new paragraph" | Press Enter |
-| "go back", "backspace" | Press Backspace |
+| "enter" | Press Enter |
 | "select all" | Ctrl+A |
-| "copy", "copy that" | Ctrl+C |
-| "paste", "paste that" | Ctrl+V |
-| "cut", "cut that" | Ctrl+X |
+| "copy" | Ctrl+C |
+| "paste" | Ctrl+V |
+| "cut" | Ctrl+X |
 | "cancel" | Discard current text |
 
 ### Custom Voice Commands
@@ -67,12 +67,15 @@ You can customize voice command phrases by editing `~/.config/speech2prompt/voic
 
 ```json
 {
-  "ENTER": ["new line", "enter", "new paragraph"],
-  "BACKSPACE": ["go back", "backspace"],
-  "SELECT_ALL": ["select all"],
-  "COPY": ["copy", "copy that"],
-  "PASTE": ["paste", "paste that"],
-  "CUT": ["cut", "cut that"]
+  "version": 1,
+  "mappings": [
+    {"phrase": "enter", "command": "ENTER", "created_at": "2024-01-01T00:00:00Z"},
+    {"phrase": "select all", "command": "SELECT_ALL", "created_at": "2024-01-01T00:00:00Z"},
+    {"phrase": "copy", "command": "COPY", "created_at": "2024-01-01T00:00:00Z"},
+    {"phrase": "paste", "command": "PASTE", "created_at": "2024-01-01T00:00:00Z"},
+    {"phrase": "cut", "command": "CUT", "created_at": "2024-01-01T00:00:00Z"},
+    {"phrase": "cancel", "command": "CANCEL", "created_at": "2024-01-01T00:00:00Z"}
+  ]
 }
 ```
 
@@ -116,16 +119,12 @@ Desktop config: `~/.config/speech2prompt/config.toml`
 
 ```toml
 [bluetooth]
-device_name = "Speech2Prompt"
+# Note: device_name is automatically set to the computer's hostname
 auto_accept = true  # Auto-accept reconnections from previously paired devices
 
 [input]
 typing_delay_ms = 10  # Delay between keystrokes
 prefer_backend = "auto"  # Options: "auto", "x11", "wayland"
-
-[history]
-enabled = true
-max_entries = 10000
 ```
 
 ## Troubleshooting

@@ -14,7 +14,7 @@ Manually triggered workflow that creates a new release with all build artifacts.
 - `version` - Semantic version number (e.g., `1.2.3`)
 
 **What it does:**
-1. Updates version numbers in `desktop/Cargo.toml` and `android/pubspec.yaml`
+1. Updates version numbers in `desktop/Cargo.toml` and `android/android/app/build.gradle.kts`
 2. Commits the version changes
 3. Creates and pushes a git tag `v{version}`
 4. Builds all artifacts in parallel:
@@ -142,10 +142,10 @@ dpkg-deb --build "${PACKAGE_NAME}"
 #### Test Android Build
 
 ```bash
-cd android
-flutter pub get
-flutter test
-flutter build apk --release
+cd android/android
+./gradlew dependencies
+./gradlew test
+./gradlew assembleRelease
 ```
 
 #### Test AppImage Build
@@ -218,19 +218,6 @@ When updating system dependencies (GTK, libadwaita, etc.):
 2. Update `desktop/packaging/rpm/speech2prompt.spec` (Requires line)
 3. Update workflow `Install system dependencies` step
 4. Test builds locally and in CI
-
-### Updating Flutter Version
-
-To change the Flutter version used in builds:
-
-Edit `.github/workflows/release.yml`:
-```yaml
-- name: Setup Flutter
-  uses: subosito/flutter-action@v2
-  with:
-    flutter-version: '3.24.0'  # Update this
-    channel: 'stable'
-```
 
 ### Updating Rust Toolchain
 

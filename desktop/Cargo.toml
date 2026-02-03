@@ -39,6 +39,7 @@ x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 
 # Utilities
 dirs = "5.0"
+gethostname = "0.4"
 anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

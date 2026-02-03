@@ -14,11 +14,8 @@ use super::VoiceCommand;
 use crate::storage::VoiceCommandStore;
 
 /// Default 2-word command phrases
-pub const DEFAULT_TWO_WORD_PHRASES: &[(&str, &str)] = &[
-    ("select all", "SELECT_ALL"),
-    ("new line", "ENTER"),
-    ("go back", "BACKSPACE"),
-];
+pub const DEFAULT_TWO_WORD_PHRASES: &[(&str, &str)] =
+    &[("select all", "SELECT_ALL"), ("new line", "ENTER")];
 
 /// Result of matching input text that may contain commands.
 #[derive(Debug, Clone)]
@@ -448,19 +445,6 @@ mod tests {
     }
 
     #[test]
-    fn test_match_two_words_go_back() {
-        let temp_dir = TempDir::new().unwrap();
-        let store = Arc::new(VoiceCommandStore::new(temp_dir.path()).unwrap());
-        let matcher = CombinedMatcher::new(store);
-
-        // "go back" should match BACKSPACE
-        assert_eq!(
-            matcher.match_two_words("go", "back"),
-            Some("BACKSPACE".to_string())
-        );
-    }
-
-    #[test]
     fn test_match_two_words_no_match() {
         let temp_dir = TempDir::new().unwrap();
         let store = Arc::new(VoiceCommandStore::new(temp_dir.path()).unwrap());
@@ -481,9 +465,6 @@ mod tests {
 
         // "new" starts "new line"
         assert!(matcher.could_start_two_word_command("new"));
-
-        // "go" starts "go back"
-        assert!(matcher.could_start_two_word_command("go"));
 
         // "hello" doesn't start any 2-word command
         assert!(!matcher.could_start_two_word_command("hello"));

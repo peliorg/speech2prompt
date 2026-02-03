@@ -17,8 +17,33 @@
 //! Handles loading and saving application settings.
 
 use anyhow::Result;
+use gethostname::gethostname;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+/// Get a sanitized hostname suitable for Bluetooth device name.
+/// Bluetooth names should only contain alphanumeric chars, spaces, and hyphens.
+fn get_sanitized_hostname() -> String {
+    let hostname = gethostname().to_string_lossy().to_string();
+    // Sanitize: keep only alphanumeric, spaces, and hyphens
+    let sanitized: String = hostname
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == ' ' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    // Trim leading/trailing hyphens and collapse multiple hyphens
+    let trimmed = sanitized.trim_matches('-');
+    if trimmed.is_empty() {
+        "Desktop".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
 
 /// Application configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,12 +60,24 @@ pub struct Config {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct BluetoothConfig {
     /// Device name advertised over Bluetooth.
+    /// This is always computed at runtime from the system hostname.
+    #[serde(skip)]
     pub device_name: String,
 
     /// Auto-accept connections from paired devices.
     pub auto_accept: bool,
+}
+
+impl Default for BluetoothConfig {
+    fn default() -> Self {
+        Self {
+            device_name: get_sanitized_hostname(),
+            auto_accept: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,10 +95,7 @@ impl Default for Config {
             data_dir: dirs::data_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
                 .join("speech2prompt"),
-            bluetooth: BluetoothConfig {
-                device_name: "Speech2Prompt".to_string(),
-                auto_accept: true,
-            },
+            bluetooth: BluetoothConfig::default(),
             input: InputConfig {
                 typing_delay_ms: 10,
                 prefer_backend: "auto".to_string(),
