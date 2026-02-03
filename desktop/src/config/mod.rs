@@ -23,7 +23,7 @@ use std::path::PathBuf;
 /// Application configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    /// Data directory for history and settings.
+    /// Data directory for storage and settings.
     #[serde(skip)]
     pub data_dir: PathBuf,
 
@@ -32,9 +32,6 @@ pub struct Config {
 
     /// Input settings.
     pub input: InputConfig,
-
-    /// History settings.
-    pub history: HistoryConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,15 +52,6 @@ pub struct InputConfig {
     pub prefer_backend: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HistoryConfig {
-    /// Enable history logging.
-    pub enabled: bool,
-
-    /// Maximum number of history entries.
-    pub max_entries: u32,
-}
-
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -77,10 +65,6 @@ impl Default for Config {
             input: InputConfig {
                 typing_delay_ms: 10,
                 prefer_backend: "auto".to_string(),
-            },
-            history: HistoryConfig {
-                enabled: true,
-                max_entries: 10000,
             },
         }
     }

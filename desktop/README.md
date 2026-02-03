@@ -140,11 +140,6 @@ auto_accept = true
 typing_delay_ms = 10
 prefer_backend = "auto"  # "auto", "x11", or "wayland"
 
-[history]
-enabled = true
-max_entries = 10000
-database_path = "~/.local/share/speech2prompt/history.db"
-
 [logging]
 level = "info"  # "error", "warn", "info", "debug", "trace"
 ```

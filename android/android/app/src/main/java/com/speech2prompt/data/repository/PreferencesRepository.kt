@@ -26,20 +26,11 @@ class PreferencesRepository @Inject constructor(
         private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
         private const val KEY_AUTO_RECONNECT = "auto_reconnect"
         
-        // Command keys
-        private const val KEY_ENTER_ENABLED = "cmd_enter_enabled"
-        private const val KEY_SELECT_ALL_ENABLED = "cmd_select_all_enabled"
-        private const val KEY_COPY_ENABLED = "cmd_copy_enabled"
-        private const val KEY_PASTE_ENABLED = "cmd_paste_enabled"
-        private const val KEY_CUT_ENABLED = "cmd_cut_enabled"
-        private const val KEY_CANCEL_ENABLED = "cmd_cancel_enabled"
-        
         // Defaults
         private const val DEFAULT_LOCALE = "cs-CZ"
         private const val DEFAULT_SHOW_PARTIAL = true
         private const val DEFAULT_KEEP_SCREEN_ON = true
         private const val DEFAULT_AUTO_RECONNECT = true
-        private const val DEFAULT_COMMAND_ENABLED = true
     }
     
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -54,26 +45,6 @@ class PreferencesRepository @Inject constructor(
     
     private val _keepScreenOn = MutableStateFlow(getBoolean(KEY_KEEP_SCREEN_ON, DEFAULT_KEEP_SCREEN_ON))
     val keepScreenOn: StateFlow<Boolean> = _keepScreenOn.asStateFlow()
-    
-    // ==================== Voice Command Settings ====================
-    
-    private val _enterEnabled = MutableStateFlow(getBoolean(KEY_ENTER_ENABLED, DEFAULT_COMMAND_ENABLED))
-    val enterEnabled: StateFlow<Boolean> = _enterEnabled.asStateFlow()
-    
-    private val _selectAllEnabled = MutableStateFlow(getBoolean(KEY_SELECT_ALL_ENABLED, DEFAULT_COMMAND_ENABLED))
-    val selectAllEnabled: StateFlow<Boolean> = _selectAllEnabled.asStateFlow()
-    
-    private val _copyEnabled = MutableStateFlow(getBoolean(KEY_COPY_ENABLED, DEFAULT_COMMAND_ENABLED))
-    val copyEnabled: StateFlow<Boolean> = _copyEnabled.asStateFlow()
-    
-    private val _pasteEnabled = MutableStateFlow(getBoolean(KEY_PASTE_ENABLED, DEFAULT_COMMAND_ENABLED))
-    val pasteEnabled: StateFlow<Boolean> = _pasteEnabled.asStateFlow()
-    
-    private val _cutEnabled = MutableStateFlow(getBoolean(KEY_CUT_ENABLED, DEFAULT_COMMAND_ENABLED))
-    val cutEnabled: StateFlow<Boolean> = _cutEnabled.asStateFlow()
-    
-    private val _cancelEnabled = MutableStateFlow(getBoolean(KEY_CANCEL_ENABLED, DEFAULT_COMMAND_ENABLED))
-    val cancelEnabled: StateFlow<Boolean> = _cancelEnabled.asStateFlow()
     
     // ==================== Connection Settings ====================
     
@@ -95,36 +66,6 @@ class PreferencesRepository @Inject constructor(
     fun setKeepScreenOn(enabled: Boolean) {
         putBoolean(KEY_KEEP_SCREEN_ON, enabled)
         _keepScreenOn.value = enabled
-    }
-    
-    fun setEnterEnabled(enabled: Boolean) {
-        putBoolean(KEY_ENTER_ENABLED, enabled)
-        _enterEnabled.value = enabled
-    }
-    
-    fun setSelectAllEnabled(enabled: Boolean) {
-        putBoolean(KEY_SELECT_ALL_ENABLED, enabled)
-        _selectAllEnabled.value = enabled
-    }
-    
-    fun setCopyEnabled(enabled: Boolean) {
-        putBoolean(KEY_COPY_ENABLED, enabled)
-        _copyEnabled.value = enabled
-    }
-    
-    fun setPasteEnabled(enabled: Boolean) {
-        putBoolean(KEY_PASTE_ENABLED, enabled)
-        _pasteEnabled.value = enabled
-    }
-    
-    fun setCutEnabled(enabled: Boolean) {
-        putBoolean(KEY_CUT_ENABLED, enabled)
-        _cutEnabled.value = enabled
-    }
-    
-    fun setCancelEnabled(enabled: Boolean) {
-        putBoolean(KEY_CANCEL_ENABLED, enabled)
-        _cancelEnabled.value = enabled
     }
     
     fun setAutoReconnect(enabled: Boolean) {

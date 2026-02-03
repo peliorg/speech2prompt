@@ -12,12 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Storage module for history and secure storage.
+//! Storage module for voice commands and secure storage.
 
-mod history;
 mod voice_commands;
 
-pub use history::History;
-#[allow(unused_imports)]
-pub use history::{EntryType, HistoryEntry};
 pub use voice_commands::{CommandInfo, VoiceCommandStore};

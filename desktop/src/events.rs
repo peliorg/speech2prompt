@@ -22,12 +22,11 @@ use crate::bluetooth::{CommandCode, ConnectionEvent};
 use crate::commands::{CombinedMatcher, MatchResult, ProcessedItem, TextSegment, VoiceCommand, WordBuffer};
 use crate::input::InputInjector;
 use crate::state::AppState;
-use crate::storage::{History, VoiceCommandStore};
+use crate::storage::VoiceCommandStore;
 
 /// Process events from Bluetooth connections.
 pub struct EventProcessor {
     injector: Box<dyn InputInjector>,
-    history: History,
     input_enabled: bool,
     voice_command_store: Option<Arc<VoiceCommandStore>>,
     state: Option<Arc<AppState>>,
@@ -37,10 +36,9 @@ pub struct EventProcessor {
 
 impl EventProcessor {
     /// Create a new event processor.
-    pub fn new(injector: Box<dyn InputInjector>, history: History) -> Self {
+    pub fn new(injector: Box<dyn InputInjector>) -> Self {
         Self {
             injector,
-            history,
             input_enabled: true,
             voice_command_store: None,
             state: None,
@@ -52,14 +50,12 @@ impl EventProcessor {
     /// Create a new event processor with voice command support.
     pub fn with_voice_commands(
         injector: Box<dyn InputInjector>,
-        history: History,
         voice_command_store: Arc<VoiceCommandStore>,
         state: Arc<AppState>,
     ) -> Self {
         let matcher = CombinedMatcher::new(voice_command_store.clone());
         Self {
             injector,
-            history,
             input_enabled: true,
             voice_command_store: Some(voice_command_store),
             state: Some(state),
@@ -112,11 +108,6 @@ impl EventProcessor {
     /// Handle received text.
     async fn handle_text(&mut self, text: &str) -> Result<()> {
         info!("Processing text: {} chars", text.len());
-
-        // Log to history
-        if let Err(e) = self.history.add_text(text) {
-            warn!("Failed to log to history: {}", e);
-        }
 
         // Check if we're in recording mode
         if let (Some(state), Some(store)) = (&self.state, &self.voice_command_store) {
@@ -200,11 +191,6 @@ impl EventProcessor {
     async fn handle_command(&mut self, cmd: &str) -> Result<()> {
         debug!("Processing command: {}", cmd);
 
-        // Log to history
-        if let Err(e) = self.history.add_command(cmd) {
-            warn!("Failed to log to history: {}", e);
-        }
-
         // Parse and execute command
         if let Some(command) = CommandCode::parse(cmd) {
             let voice_cmd = match command {
@@ -270,11 +256,6 @@ impl EventProcessor {
     async fn process_item(&mut self, item: ProcessedItem) -> Result<()> {
         match item {
             ProcessedItem::Text(text) => {
-                // Log to history
-                if let Err(e) = self.history.add_text(&text) {
-                    warn!("Failed to log text to history: {}", e);
-                }
-
                 // Check recording mode
                 if let (Some(state), Some(store)) = (&self.state, &self.voice_command_store) {
                     if let Some(command) = state.get_recording_command() {

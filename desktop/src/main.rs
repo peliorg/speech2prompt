@@ -35,7 +35,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use bluetooth::GattServer;
 use events::EventProcessor;
 use state::AppState;
-use storage::{History, VoiceCommandStore};
+use storage::VoiceCommandStore;
 
 /// Request to show confirmation dialog for pairing.
 #[derive(Debug, Clone)]
@@ -63,10 +63,6 @@ async fn main() -> Result<()> {
     // Load configuration
     let config = config::Config::load()?;
     info!("Configuration loaded");
-
-    // Initialize storage
-    let history = Arc::new(History::new(&config.data_dir)?);
-    info!("History storage initialized");
 
     // Initialize voice command store with file watcher
     let voice_command_store = match VoiceCommandStore::new_with_watcher(&config.data_dir) {
@@ -116,14 +112,20 @@ async fn main() -> Result<()> {
 
     // Create event processor
     let processor = if let Some(store) = voice_command_store.clone() {
-        EventProcessor::with_voice_commands(injector, (*history).clone(), store, state.clone())
+        EventProcessor::with_voice_commands(injector, store, state.clone())
     } else {
-        EventProcessor::new(injector, (*history).clone())
+        EventProcessor::new(injector)
     };
+
+    // Start system tray
+    let (mut action_rx, tray_handle) = ui::run_tray(state.clone())?;
+    
+    info!("Ready. System tray active.");
 
     // Handle BLE GATT events
     let state_gatt = state.clone();
     let mut gatt_event_rx_state = gatt_event_rx;
+    let tray_handle_gatt = tray_handle.clone();
     
     tokio::spawn(async move {
         let mut processor_gatt = processor;
@@ -142,14 +144,17 @@ async fn main() -> Result<()> {
                         bluetooth::ConnectionEvent::Connected { device_name } => {
                             info!("BLE device connected: {}", device_name);
                             state_gatt.set_connected(device_name.clone());
+                            tray_handle_gatt.update(|_| {});
                         }
                         bluetooth::ConnectionEvent::Disconnected => {
                             info!("BLE device disconnected");
                             state_gatt.set_disconnected();
+                            tray_handle_gatt.update(|_| {});
                         }
                         bluetooth::ConnectionEvent::Error(e) => {
                             error!("BLE error: {}", e);
                             state_gatt.set_error();
+                            tray_handle_gatt.update(|_| {});
                         }
                         bluetooth::ConnectionEvent::TextReceived(text) => {
                             debug!("BLE text received: {}", text);
@@ -194,7 +199,7 @@ async fn main() -> Result<()> {
     });
 
     // Start system tray
-    let mut action_rx = ui::run_tray(state.clone())?;
+    let (mut action_rx, tray_handle) = ui::run_tray(state.clone())?;
     
     info!("Ready. System tray active.");
 
@@ -217,12 +222,7 @@ async fn main() -> Result<()> {
                         let enabled = !state.is_input_enabled();
                         state.set_input_enabled(enabled);
                         info!("Input {}", if enabled { "enabled" } else { "disabled" });
-                    }
-                    ui::TrayAction::ShowHistory => {
-                        info!("History window requested");
-                        // TODO: Open GTK window
-                        // Future feature: Display a GTK window showing voice command history
-                        // This will allow users to review their recent voice commands
+                        tray_handle.update(|_| {});
                     }
                     ui::TrayAction::ManageCommands => {
                         info!("Manage Commands window requested");
@@ -320,6 +320,7 @@ async fn main() -> Result<()> {
                             error!("❌ Pairing failed: {}", e);
                         } else {
                             info!("🎉 Pairing completed successfully!");
+                            tray_handle.update(|_| {});
                         }
                     }
                     ui::ConfirmationResult::Rejected => {
