@@ -111,13 +111,6 @@ data class PermissionState(
     }
     
     /**
-     * Returns a list of all missing permissions (denied or denied permanently).
-     */
-    fun getMissingPermissions(): List<String> {
-        return getDeniedPermissions() + getPermanentlyDeniedPermissions()
-    }
-    
-    /**
      * Checks if any permissions are permanently denied.
      */
     fun hasPermanentlyDeniedPermissions(): Boolean {
@@ -125,36 +118,6 @@ data class PermissionState(
     }
     
     companion object {
-        /**
-         * Creates a PermissionState with all permissions granted.
-         */
-        fun allGranted(): PermissionState {
-            val bluetoothPerms = getRequiredBluetoothPermissions()
-            val audioPerms = getRequiredAudioPermissions()
-            val locationPerms = getRequiredLocationPermissions()
-            
-            return PermissionState(
-                bluetooth = bluetoothPerms.associateWith { PermissionStatus.GRANTED },
-                audio = audioPerms.associateWith { PermissionStatus.GRANTED },
-                location = locationPerms.associateWith { PermissionStatus.GRANTED }
-            )
-        }
-        
-        /**
-         * Creates a PermissionState with all permissions denied.
-         */
-        fun allDenied(): PermissionState {
-            val bluetoothPerms = getRequiredBluetoothPermissions()
-            val audioPerms = getRequiredAudioPermissions()
-            val locationPerms = getRequiredLocationPermissions()
-            
-            return PermissionState(
-                bluetooth = bluetoothPerms.associateWith { PermissionStatus.DENIED },
-                audio = audioPerms.associateWith { PermissionStatus.DENIED },
-                location = locationPerms.associateWith { PermissionStatus.DENIED }
-            )
-        }
-        
         /**
          * Returns the list of Bluetooth permissions required for the current API level.
          */

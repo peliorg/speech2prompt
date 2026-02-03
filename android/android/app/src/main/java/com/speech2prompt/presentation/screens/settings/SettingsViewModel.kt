@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.speech2prompt.data.model.PairedDevice
 import com.speech2prompt.data.repository.PreferencesRepository
-import com.speech2prompt.service.ble.BleManager
+
 import com.speech2prompt.service.speech.SpeechRecognitionManager
 import com.speech2prompt.util.crypto.SecureStorageManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,7 +19,6 @@ import javax.inject.Inject
  * 
  * Features:
  * - Speech recognition settings
- * - Voice command toggles
  * - Connection settings
  * - Paired devices management
  */
@@ -27,7 +26,6 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val speechRecognitionManager: SpeechRecognitionManager,
-    private val bleManager: BleManager,
     private val secureStorage: SecureStorageManager
 ) : ViewModel() {
     
@@ -37,15 +35,6 @@ class SettingsViewModel @Inject constructor(
     val availableLocales: StateFlow<List<Locale>> = speechRecognitionManager.availableLocales
     val showPartialResults: StateFlow<Boolean> = preferencesRepository.showPartialResults
     val keepScreenOn: StateFlow<Boolean> = preferencesRepository.keepScreenOn
-    
-    // ==================== Voice Command Settings ====================
-    
-    val enterEnabled: StateFlow<Boolean> = preferencesRepository.enterEnabled
-    val selectAllEnabled: StateFlow<Boolean> = preferencesRepository.selectAllEnabled
-    val copyEnabled: StateFlow<Boolean> = preferencesRepository.copyEnabled
-    val pasteEnabled: StateFlow<Boolean> = preferencesRepository.pasteEnabled
-    val cutEnabled: StateFlow<Boolean> = preferencesRepository.cutEnabled
-    val cancelEnabled: StateFlow<Boolean> = preferencesRepository.cancelEnabled
     
     // ==================== Connection Settings ====================
     
@@ -75,32 +64,6 @@ class SettingsViewModel @Inject constructor(
     
     fun setKeepScreenOn(enabled: Boolean) {
         preferencesRepository.setKeepScreenOn(enabled)
-    }
-    
-    // ==================== Voice Command Actions ====================
-    
-    fun setEnterEnabled(enabled: Boolean) {
-        preferencesRepository.setEnterEnabled(enabled)
-    }
-    
-    fun setSelectAllEnabled(enabled: Boolean) {
-        preferencesRepository.setSelectAllEnabled(enabled)
-    }
-    
-    fun setCopyEnabled(enabled: Boolean) {
-        preferencesRepository.setCopyEnabled(enabled)
-    }
-    
-    fun setPasteEnabled(enabled: Boolean) {
-        preferencesRepository.setPasteEnabled(enabled)
-    }
-    
-    fun setCutEnabled(enabled: Boolean) {
-        preferencesRepository.setCutEnabled(enabled)
-    }
-    
-    fun setCancelEnabled(enabled: Boolean) {
-        preferencesRepository.setCancelEnabled(enabled)
     }
     
     // ==================== Connection Actions ====================

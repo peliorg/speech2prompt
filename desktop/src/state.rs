@@ -28,16 +28,6 @@ pub enum ConnectionStatus {
 }
 
 impl ConnectionStatus {
-    #[allow(dead_code)]
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            ConnectionStatus::Disconnected => "Disconnected",
-            ConnectionStatus::Connecting => "Connecting...",
-            ConnectionStatus::Connected => "Connected",
-            ConnectionStatus::Error => "Error",
-        }
-    }
-
     pub fn icon_name(&self) -> &'static str {
         match self {
             ConnectionStatus::Disconnected => "network-offline",
@@ -116,11 +106,6 @@ impl AppState {
 
     pub fn set_last_text(&self, text: String) {
         *self.last_text.write() = Some(text);
-    }
-
-    #[allow(dead_code)]
-    pub fn get_last_text(&self) -> Option<String> {
-        self.last_text.read().clone()
     }
 
     /// Start recording mode for a command.

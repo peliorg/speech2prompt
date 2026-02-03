@@ -138,9 +138,6 @@ dependencies {
     ksp(libs.hilt.android.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
-    // Networking
-    implementation(libs.bundles.networking)
-
     // X25519 ECDH now uses native Android support (API 33+)
 
     // Unit Testing

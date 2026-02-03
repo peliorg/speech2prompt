@@ -349,17 +349,6 @@ class BleConnection @Inject constructor(
             onCharacteristicChanged?.invoke(characteristic, value)
         }
         
-        // Legacy callback for older API levels
-        @Deprecated("Deprecated in API 33")
-        override fun onCharacteristicChanged(
-            gatt: BluetoothGatt,
-            characteristic: BluetoothGattCharacteristic
-        ) {
-            characteristic.value?.let { value ->
-                onCharacteristicChanged?.invoke(characteristic, value)
-            }
-        }
-        
         override fun onCharacteristicWrite(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic,

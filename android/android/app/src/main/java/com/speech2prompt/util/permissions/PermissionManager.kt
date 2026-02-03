@@ -5,11 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
-import androidx.activity.ComponentActivity
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -182,37 +178,6 @@ class PermissionManager @Inject constructor(
     }
     
     /**
-     * Gets a list of missing permissions (not granted).
-     *
-     * @return List of permissions that are not granted
-     */
-    fun getMissingPermissions(): List<String> {
-        val allPermissions = PermissionState.getAllRequiredPermissions()
-        return allPermissions.filter { !isPermissionGranted(it) }
-    }
-    
-    /**
-     * Gets a list of missing Bluetooth permissions.
-     *
-     * @return List of Bluetooth permissions that are not granted
-     */
-    fun getMissingBluetoothPermissions(): List<String> {
-        val bluetoothPermissions = PermissionState.getRequiredBluetoothPermissions()
-        val locationPermissions = PermissionState.getRequiredLocationPermissions()
-        return (bluetoothPermissions + locationPermissions).filter { !isPermissionGranted(it) }
-    }
-    
-    /**
-     * Gets a list of missing audio permissions.
-     *
-     * @return List of audio permissions that are not granted
-     */
-    fun getMissingAudioPermissions(): List<String> {
-        val audioPermissions = PermissionState.getRequiredAudioPermissions()
-        return audioPermissions.filter { !isPermissionGranted(it) }
-    }
-    
-    /**
      * Creates an intent to open the app's settings page.
      * This is useful when permissions are permanently denied.
      *
@@ -233,85 +198,10 @@ class PermissionManager @Inject constructor(
         context.startActivity(createAppSettingsIntent())
     }
     
-    /**
-     * Creates a permission launcher for requesting multiple permissions.
-     * This uses the Activity Result API which is the modern way to request permissions.
-     *
-     * Usage in a ComponentActivity:
-     * ```
-     * val launcher = permissionManager.createPermissionLauncher(this) { results ->
-     *     // Handle permission results
-     * }
-     * launcher.launch(permissionsToRequest)
-     * ```
-     *
-     * @param activity The ComponentActivity to register the launcher with
-     * @param onResult Callback to handle permission results
-     * @return ActivityResultLauncher for requesting permissions
-     */
-    fun createPermissionLauncher(
-        activity: ComponentActivity,
-        onResult: (Map<String, Boolean>) -> Unit
-    ): ActivityResultLauncher<Array<String>> {
-        return activity.registerForActivityResult(
-            ActivityResultContracts.RequestMultiplePermissions()
-        ) { results ->
-            // Mark all requested permissions as having been requested
-            markPermissionsAsRequested(results.keys.toList())
-            onResult(results)
-        }
-    }
-    
-    /**
-     * Checks if the device supports Bluetooth LE.
-     *
-     * @return true if Bluetooth LE is supported
-     */
-    fun isBluetoothLeSupported(): Boolean {
-        return context.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)
-    }
-    
-    /**
-     * Checks if the device has a microphone.
-     *
-     * @return true if a microphone is available
-     */
-    fun hasMicrophone(): Boolean {
-        return context.packageManager.hasSystemFeature(PackageManager.FEATURE_MICROPHONE)
-    }
-    
     companion object {
         /**
          * SharedPreferences name for storing permission request history.
          */
         private const val PREFS_NAME = "permission_manager_prefs"
-        
-        /**
-         * Gets all Bluetooth permissions required for the current API level.
-         */
-        fun getRequiredBluetoothPermissions(): List<String> {
-            return PermissionState.getRequiredBluetoothPermissions()
-        }
-        
-        /**
-         * Gets all audio permissions required.
-         */
-        fun getRequiredAudioPermissions(): List<String> {
-            return PermissionState.getRequiredAudioPermissions()
-        }
-        
-        /**
-         * Gets all location permissions required for the current API level.
-         */
-        fun getRequiredLocationPermissions(): List<String> {
-            return PermissionState.getRequiredLocationPermissions()
-        }
-        
-        /**
-         * Gets all permissions required by the app.
-         */
-        fun getAllRequiredPermissions(): List<String> {
-            return PermissionState.getAllRequiredPermissions()
-        }
     }
 }

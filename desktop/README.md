@@ -12,7 +12,6 @@ This is the desktop component that receives transcribed text from the Android ap
 - **UI Framework**: GTK4 + libadwaita
 - **Async Runtime**: Tokio
 - **Bluetooth**: BlueZ (BLE GATT server)
-- **Database**: SQLite (via rusqlite)
 - **Encryption**: AES-256-GCM
 
 ## Key Features
@@ -20,7 +19,6 @@ This is the desktop component that receives transcribed text from the Android ap
 - BLE GATT server for low-power communication
 - X11 and Wayland input injection support
 - System tray integration
-- History logging with SQLite
 - AES-256-GCM encryption with ECDH key exchange
 - Configurable via TOML file
 - Systemd service integration
@@ -38,7 +36,6 @@ sudo apt install \
     libadwaita-1-dev \
     libdbus-1-dev \
     libbluetooth-dev \
-    libsqlite3-dev \
     libxdo-dev
 ```
 
@@ -51,7 +48,6 @@ sudo dnf install \
     libadwaita-devel \
     dbus-devel \
     bluez-libs-devel \
-    sqlite-devel \
     xdotool-devel
 ```
 
@@ -63,7 +59,6 @@ sudo pacman -S \
     libadwaita \
     dbus \
     bluez \
-    sqlite \
     xdotool
 ```
 
@@ -106,7 +101,7 @@ cp target/release/speech2prompt-desktop ~/.local/bin/
 
 # Install systemd service
 mkdir -p ~/.config/systemd/user
-cp systemd/speech2prompt.service ~/.config/systemd/user/
+cp resources/speech2prompt.service ~/.config/systemd/user/
 systemctl --user enable speech2prompt
 systemctl --user start speech2prompt
 ```
@@ -133,20 +128,12 @@ Config file location: `~/.config/speech2prompt/config.toml`
 
 ```toml
 [bluetooth]
-device_name = "Speech2Prompt"
+# Note: device_name is automatically set to the computer's hostname
 auto_accept = true
 
 [input]
 typing_delay_ms = 10
 prefer_backend = "auto"  # "auto", "x11", or "wayland"
-
-[history]
-enabled = true
-max_entries = 10000
-database_path = "~/.local/share/speech2prompt/history.db"
-
-[logging]
-level = "info"  # "error", "warn", "info", "debug", "trace"
 ```
 
 ## Usage
@@ -171,9 +158,9 @@ journalctl --user -u speech2prompt -f
 ### System Tray
 
 The app runs in the system tray with the following options:
-- **Show History** - View dictation history
-- **Settings** - Configure preferences
-- **About** - Version and license information
+- **Status** - Shows current connection status (disabled header)
+- **Input Enabled/Disabled** - Toggle input injection on/off
+- **Manage Commands...** - Configure voice command mappings
 - **Quit** - Exit application
 
 ### Pairing
@@ -294,15 +281,14 @@ desktop/
 │   ├── commands/         # Voice command processor
 │   ├── config/           # Configuration management
 │   ├── crypto/           # AES-256-GCM, ECDH
-│   ├── database/         # SQLite history
+│   ├── events.rs         # Event handling
 │   ├── input/            # X11/Wayland input injection
-│   ├── protocol/         # Message protocol
-│   ├── tray/             # System tray integration
+│   ├── storage/          # Persistent storage
 │   └── ui/               # GTK4 dialogs
 ├── Cargo.toml
 ├── scripts/
 │   └── install.sh
-└── systemd/
+└── resources/
     └── speech2prompt.service
 ```
 

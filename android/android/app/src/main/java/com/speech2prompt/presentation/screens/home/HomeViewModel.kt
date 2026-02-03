@@ -295,56 +295,65 @@ class HomeViewModel @Inject constructor(
      * 
      * The final result may differ from partials in important ways:
      * - Words that appeared in partials may be removed (e.g., "Aha" disappears)
-     * - New words may be added at the end (e.g., "Koh" appears only in final)
+     * - New words may be added at the beginning or end (e.g., "vidíš" prepended)
+     * - Words may be reordered
      * 
-     * Example scenario that caused word loss:
-     * - Partial results: "Aha" "to" "bylo" "kuch" "a" "ne" -> sentWordCount=6
-     * - Final result: "to bylo kuch a ne Koh" (6 words, but "Aha" removed, "Koh" added)
-     * - Old logic: for (i in 6 until 6) -> nothing sent -> "Koh" lost!
+     * Example scenarios that can cause word loss:
+     * 1. Partial: "nerozumíš" (1 word) -> Final: "vidíš nerozumíš" (2 words)
+     *    - "vidíš" appears at position 0, but sentWordCount=1, so standard loop
+     *      only sends position 1 onwards -> "vidíš" never sent!
      * 
-     * Fix: Compare final text to lastPartialText. If they differ substantially,
-     * find and send any new trailing words that weren't in partials.
+     * 2. Partial: "Aha to bylo" (3 words) -> Final: "to bylo Koh" (3 words)
+     *    - sentWordCount=3, finalWords.size=3, standard loop sends nothing
+     *    - But "Koh" is new and wasn't in partials -> "Koh" never sent!
+     * 
+     * Fix: Compare final words with the last partial words and send any words
+     * from the final that weren't in the partial. This handles:
+     * - New words at the beginning (like "vidíš")
+     * - New words at the end (like "Koh")
+     * - Replaced words anywhere in the text
      */
     private fun handleFinalResult(text: String) {
         if (!isConnected() || text.isBlank()) return
         
         val finalWords = text.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        val partialWords = lastPartialText.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
         
-        // Standard case: send any words beyond what we've already sent
-        for (i in sentWordCount until finalWords.size) {
-            sendWord(finalWords[i])
+        // Find words in final that need to be sent
+        // Strategy: Build a "budget" of each word from partials, then find final words
+        // that exceed that budget (weren't in partials or appear more times than in partials)
+        
+        // Count occurrences of each word in partials (these were already sent)
+        val partialWordCounts = mutableMapOf<String, Int>()
+        for (word in partialWords) {
+            partialWordCounts[word] = (partialWordCounts[word] ?: 0) + 1
         }
         
-        // Edge case: final text differs from partials (words removed/changed)
-        // In this case, sentWordCount may be >= finalWords.size even though
-        // the final has new words not in partials
-        if (lastPartialText.isNotEmpty() && sentWordCount >= finalWords.size) {
-            val partialWords = lastPartialText.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        // Find words in final that weren't fully covered by partials
+        val wordsToSend = mutableListOf<String>()
+        val usedFromPartial = mutableMapOf<String, Int>()
+        
+        for (word in finalWords) {
+            val available = partialWordCounts[word] ?: 0
+            val used = usedFromPartial[word] ?: 0
             
-            // Find trailing words in final that weren't in partial
-            // We compare from the end, looking for words unique to final
-            val partialWordSet = partialWords.toSet()
-            val trailingNewWords = mutableListOf<String>()
-            
-            // Scan from end of final words
-            for (i in (finalWords.size - 1) downTo 0) {
-                val word = finalWords[i]
-                // If we find a word that matches partial, stop scanning
-                // (we assume earlier words were already sent)
-                if (partialWordSet.contains(word)) {
-                    break
-                }
-                trailingNewWords.add(0, word)
-            }
-            
-            if (trailingNewWords.isNotEmpty()) {
-                Log.d(TAG, "Final result has ${trailingNewWords.size} new trailing words not in partial: $trailingNewWords")
-                for (word in trailingNewWords) {
-                    sendWord(word)
-                }
+            if (used < available) {
+                // This word was in partials (already sent), mark it as used
+                usedFromPartial[word] = used + 1
+            } else {
+                // This word exceeds what was in partials - needs to be sent
+                wordsToSend.add(word)
             }
         }
         
+        if (wordsToSend.isNotEmpty()) {
+            Log.d(TAG, "Final result has ${wordsToSend.size} words not in partial: $wordsToSend (final='$text', partial='$lastPartialText')")
+            for (word in wordsToSend) {
+                sendWord(word)
+            }
+        }
+        
+        // Update sentWordCount to final word count for consistency
         sentWordCount = finalWords.size
         
         // Note: We intentionally do NOT reset sentWordCount here.

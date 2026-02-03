@@ -84,12 +84,6 @@ impl CryptoContext {
         let calculated = self.checksum(version, msg_type, payload, timestamp);
         calculated == expected
     }
-
-    /// Get the raw key bytes.
-    #[allow(dead_code)]
-    pub fn key(&self) -> &[u8; KEY_SIZE] {
-        &self.key
-    }
 }
 
 /// Derive a 256-bit key from PIN and device identifiers.
@@ -181,14 +175,6 @@ pub fn checksum(
 
     let hash = hasher.finalize();
     hex::encode(&hash[..4]) // First 4 bytes = 8 hex chars
-}
-
-/// Generate a random device ID.
-#[allow(dead_code)]
-pub fn generate_device_id() -> String {
-    let mut bytes = [0u8; 16];
-    OsRng.fill_bytes(&mut bytes);
-    format!("linux-{}", hex::encode(bytes))
 }
 
 #[cfg(test)]

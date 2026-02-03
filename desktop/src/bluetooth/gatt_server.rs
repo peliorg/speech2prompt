@@ -106,6 +106,7 @@ impl ServerState {
 pub struct GattServer {
     adapter: Adapter,
     linux_device_id: String,
+    device_name: String,
     event_tx: mpsc::Sender<ConnectionEvent>,
     state: Arc<RwLock<ServerState>>,
     response_tx: Arc<Mutex<Option<mpsc::Sender<Vec<u8>>>>>,
@@ -142,6 +143,7 @@ impl GattServer {
         Ok(Self {
             adapter,
             linux_device_id,
+            device_name: String::new(),
             event_tx,
             state: Arc::new(RwLock::new(ServerState::new())),
             response_tx: Arc::new(Mutex::new(None)),
@@ -164,7 +166,8 @@ impl GattServer {
     }
 
     /// Set the device name.
-    pub async fn set_name(&self, name: &str) -> Result<()> {
+    pub async fn set_name(&mut self, name: &str) -> Result<()> {
+        self.device_name = name.to_string();
         self.adapter.set_alias(name.to_string()).await?;
         info!("Bluetooth name set to: {}", name);
         Ok(())
@@ -707,7 +710,7 @@ impl GattServer {
         let adv = Advertisement {
             service_uuids: vec![SERVICE_UUID].into_iter().collect(),
             discoverable: Some(true),
-            local_name: Some("Speech2Prompt".to_string()),
+            local_name: Some(self.device_name.clone()),
             ..Default::default()
         };
 

@@ -22,7 +22,6 @@ import java.util.Locale
  * 
  * Features:
  * - Speech settings section (locale, partial results)
- * - Voice commands section (toggle individual commands)
  * - Connection settings (auto-reconnect)
  * - Paired devices management
  * - Clear all data option
@@ -37,13 +36,6 @@ fun SettingsScreen(
     val availableLocales by viewModel.availableLocales.collectAsState()
     val showPartialResults by viewModel.showPartialResults.collectAsState()
     val keepScreenOn by viewModel.keepScreenOn.collectAsState()
-    
-    val enterEnabled by viewModel.enterEnabled.collectAsState()
-    val selectAllEnabled by viewModel.selectAllEnabled.collectAsState()
-    val copyEnabled by viewModel.copyEnabled.collectAsState()
-    val pasteEnabled by viewModel.pasteEnabled.collectAsState()
-    val cutEnabled by viewModel.cutEnabled.collectAsState()
-    val cancelEnabled by viewModel.cancelEnabled.collectAsState()
     
     val autoReconnect by viewModel.autoReconnect.collectAsState()
     val pairedDevices by viewModel.pairedDevices.collectAsState()
@@ -105,57 +97,6 @@ fun SettingsScreen(
                     icon = Icons.Default.ScreenLockPortrait,
                     checked = keepScreenOn,
                     onCheckedChange = viewModel::setKeepScreenOn
-                )
-            }
-            
-            // Voice Commands Section
-            SettingsSection(title = "Voice Commands") {
-                SettingsToggleItem(
-                    title = "Enter Command",
-                    subtitle = "Press Enter key",
-                    icon = Icons.Default.KeyboardReturn,
-                    checked = enterEnabled,
-                    onCheckedChange = viewModel::setEnterEnabled
-                )
-                
-                SettingsToggleItem(
-                    title = "Select All Command",
-                    subtitle = "Select all text",
-                    icon = Icons.Default.SelectAll,
-                    checked = selectAllEnabled,
-                    onCheckedChange = viewModel::setSelectAllEnabled
-                )
-                
-                SettingsToggleItem(
-                    title = "Copy Command",
-                    subtitle = "Copy selected text",
-                    icon = Icons.Default.ContentCopy,
-                    checked = copyEnabled,
-                    onCheckedChange = viewModel::setCopyEnabled
-                )
-                
-                SettingsToggleItem(
-                    title = "Paste Command",
-                    subtitle = "Paste from clipboard",
-                    icon = Icons.Default.ContentPaste,
-                    checked = pasteEnabled,
-                    onCheckedChange = viewModel::setPasteEnabled
-                )
-                
-                SettingsToggleItem(
-                    title = "Cut Command",
-                    subtitle = "Cut selected text",
-                    icon = Icons.Default.ContentCut,
-                    checked = cutEnabled,
-                    onCheckedChange = viewModel::setCutEnabled
-                )
-                
-                SettingsToggleItem(
-                    title = "Cancel Command",
-                    subtitle = "Cancel current operation",
-                    icon = Icons.Default.Cancel,
-                    checked = cancelEnabled,
-                    onCheckedChange = viewModel::setCancelEnabled
                 )
             }
             

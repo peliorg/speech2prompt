@@ -20,26 +20,6 @@ sealed class Screen(val route: String) {
      */
     object Settings : Screen("settings")
     
-    /**
-     * Speech Test screen - Test speech recognition functionality
-     */
-    object SpeechTest : Screen("speech_test")
-    
-    /**
-     * Bluetooth Test screen - Test BLE connection functionality
-     */
-    object BluetoothTest : Screen("bluetooth_test")
-    
-    /**
-     * History screen - View transcription history
-     */
-    object History : Screen("history")
-    
-    /**
-     * Permissions screen - Request and manage app permissions
-     */
-    object Permissions : Screen("permissions")
-    
     companion object {
         /**
          * Get all screen routes for navigation graph setup
@@ -49,11 +29,7 @@ sealed class Screen(val route: String) {
             listOf(
                 Home.route,
                 Connection.route,
-                Settings.route,
-                SpeechTest.route,
-                BluetoothTest.route,
-                History.route,
-                Permissions.route
+                Settings.route
             )
         }
         
@@ -65,10 +41,6 @@ sealed class Screen(val route: String) {
                 Home.route -> Home
                 Connection.route -> Connection
                 Settings.route -> Settings
-                SpeechTest.route -> SpeechTest
-                BluetoothTest.route -> BluetoothTest
-                History.route -> History
-                Permissions.route -> Permissions
                 else -> Home
             }
         }

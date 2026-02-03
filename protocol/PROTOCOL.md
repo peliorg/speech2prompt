@@ -278,12 +278,15 @@ The desktop app matches words to commands using configurable phrases:
 **Default phrases** (`~/.config/speech2prompt/voice_commands.json`):
 ```json
 {
-  "ENTER": ["new line", "enter", "new paragraph"],
-  "BACKSPACE": ["go back", "backspace"],
-  "SELECT_ALL": ["select all"],
-  "COPY": ["copy", "copy that"],
-  "PASTE": ["paste", "paste that"],
-  "CUT": ["cut", "cut that"]
+  "version": 1,
+  "mappings": [
+    {"phrase": "enter", "command": "ENTER", "created_at": "2024-01-01T00:00:00Z"},
+    {"phrase": "select all", "command": "SELECT_ALL", "created_at": "2024-01-01T00:00:00Z"},
+    {"phrase": "copy", "command": "COPY", "created_at": "2024-01-01T00:00:00Z"},
+    {"phrase": "paste", "command": "PASTE", "created_at": "2024-01-01T00:00:00Z"},
+    {"phrase": "cut", "command": "CUT", "created_at": "2024-01-01T00:00:00Z"},
+    {"phrase": "cancel", "command": "CANCEL", "created_at": "2024-01-01T00:00:00Z"}
+  ]
 }
 ```
 

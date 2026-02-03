@@ -15,7 +15,7 @@
 //! System tray implementation using ksni.
 
 use anyhow::Result;
-use ksni::{self, menu::StandardItem, MenuItem, Tray, TrayService};
+use ksni::{self, menu::StandardItem, Handle, MenuItem, Tray, TrayService};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::info;
@@ -26,9 +26,7 @@ use crate::state::{AppState, ConnectionStatus};
 #[derive(Debug, Clone)]
 pub enum TrayAction {
     ToggleInput,
-    ShowHistory,
     ManageCommands,
-    ShowSettings,
     Quit,
 }
 
@@ -126,29 +124,11 @@ impl Tray for Speech2PromptTray {
 
         items.push(MenuItem::Separator);
 
-        // History
-        items.push(MenuItem::Standard(StandardItem {
-            label: "View History...".to_string(),
-            activate: Box::new(|tray: &mut Self| {
-                let _ = tray.action_tx.send(TrayAction::ShowHistory);
-            }),
-            ..Default::default()
-        }));
-
         // Manage Commands
         items.push(MenuItem::Standard(StandardItem {
             label: "Manage Commands...".to_string(),
             activate: Box::new(|tray: &mut Self| {
                 let _ = tray.action_tx.send(TrayAction::ManageCommands);
-            }),
-            ..Default::default()
-        }));
-
-        // Settings
-        items.push(MenuItem::Standard(StandardItem {
-            label: "Settings...".to_string(),
-            activate: Box::new(|tray: &mut Self| {
-                let _ = tray.action_tx.send(TrayAction::ShowSettings);
             }),
             ..Default::default()
         }));
@@ -177,12 +157,17 @@ impl Tray for Speech2PromptTray {
 }
 
 /// Run the system tray service.
-pub fn run_tray(state: Arc<AppState>) -> Result<mpsc::UnboundedReceiver<TrayAction>> {
+pub fn run_tray(
+    state: Arc<AppState>,
+) -> Result<(
+    mpsc::UnboundedReceiver<TrayAction>,
+    Handle<Speech2PromptTray>,
+)> {
     let (action_tx, action_rx) = mpsc::unbounded_channel();
 
     let tray = Speech2PromptTray::new(state, action_tx);
     let service = TrayService::new(tray);
-    let _handle = service.handle();
+    let handle = service.handle();
 
     // Spawn the tray service
     std::thread::spawn(move || {
@@ -191,5 +176,5 @@ pub fn run_tray(state: Arc<AppState>) -> Result<mpsc::UnboundedReceiver<TrayActi
 
     info!("System tray started");
 
-    Ok(action_rx)
+    Ok((action_rx, handle))
 }

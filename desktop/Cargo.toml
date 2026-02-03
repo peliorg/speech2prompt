@@ -23,9 +23,6 @@ glib = "0.18"
 # System tray
 ksni = "0.2"
 
-# Database
-rusqlite = { version = "0.30", features = ["bundled"] }
-
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -42,6 +39,7 @@ x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 
 # Utilities
 dirs = "5.0"
+gethostname = "0.4"
 anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -5,8 +5,8 @@
 
 use gtk4::prelude::*;
 use gtk4::{
-    gdk, Application, ApplicationWindow, Box as GtkBox, Button, CssProvider, Label, ListBox,
-    ListBoxRow, Orientation, ScrolledWindow, SelectionMode,
+    Application, ApplicationWindow, Box as GtkBox, Button, Label, ListBox, ListBoxRow, Orientation,
+    ScrolledWindow, SelectionMode,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -44,9 +44,6 @@ pub fn show_manage_commands_window(
         .default_height(400)
         .modal(false) // Non-modal as requested
         .build();
-
-    // Load CSS for hover effects
-    load_button_css();
 
     let main_box = GtkBox::new(Orientation::Vertical, 12);
     main_box.set_margin_top(16);
@@ -90,7 +87,6 @@ pub fn show_manage_commands_window(
     footer_box.append(&legend);
 
     let close_button = Button::with_label("Close");
-    close_button.add_css_class("close-btn");
     close_button.set_width_request(100);
     footer_box.append(&close_button);
     main_box.append(&footer_box);
@@ -195,7 +191,6 @@ fn create_command_row(
         btn
     } else {
         let btn = Button::with_label("Record");
-        btn.add_css_class("record-btn");
         if is_recording_other {
             btn.set_sensitive(false);
         }
@@ -225,7 +220,6 @@ fn create_command_row(
 
     // Revert button
     let revert_button = Button::with_label("Revert");
-    revert_button.add_css_class("revert-btn");
     revert_button.set_width_request(80);
     revert_button.set_sensitive(cmd_info.is_custom && !is_recording_this);
 
@@ -342,52 +336,4 @@ pub fn show_recording_dialog(app: &Application, command: &str, state: Arc<AppSta
 
     dialog.present();
     info!("Recording dialog opened for command: {}", command);
-}
-
-/// Load CSS for button hover effects.
-fn load_button_css() {
-    let provider = CssProvider::new();
-    provider.load_from_data(
-        r#"
-        /* Record button hover effect */
-        button.record-btn {
-            transition: all 200ms ease-in-out;
-        }
-        button.record-btn:hover {
-            background: alpha(@accent_bg_color, 0.15);
-            box-shadow: 0 2px 4px alpha(black, 0.2);
-        }
-        
-        /* Revert button hover effect */
-        button.revert-btn {
-            transition: all 200ms ease-in-out;
-        }
-        button.revert-btn:hover:not(:disabled) {
-            background: alpha(@warning_color, 0.15);
-            box-shadow: 0 2px 4px alpha(black, 0.2);
-        }
-        
-        /* Cancel button (destructive) hover already handled by GTK */
-        button.destructive-action {
-            transition: all 200ms ease-in-out;
-        }
-        button.destructive-action:hover {
-            box-shadow: 0 2px 6px alpha(black, 0.3);
-        }
-        
-        /* Close button hover */
-        button.close-btn {
-            transition: all 200ms ease-in-out;
-        }
-        button.close-btn:hover {
-            background: alpha(@accent_bg_color, 0.1);
-        }
-        "#,
-    );
-
-    gtk4::style_context_add_provider_for_display(
-        &gdk::Display::default().expect("Could not get default display"),
-        &provider,
-        gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
 }
